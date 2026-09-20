@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!DOCTYPE gendsp SYSTEM "file:gendsp.dtd">
+<gendsp>
+	<title>tv.decode</title>
+	<description>Audio decoder: A/R/G/B planes to L/R stereo</description>
+	<inlets>
+		<inlet id="0" name="Alpha" />
+		<inlet id="1" name="Red" comment="Mid signal" />
+		<inlet id="2" name="Green" comment="Flux (unused in decode)" />
+		<inlet id="3" name="Blue" comment="Side signal" />
+	</inlets>
+	<outlets>
+		<outlet id="0" name="Left" />
+		<outlet id="1" name="Right" />
+	</outlets>
+	<params>
+		<param id="0" name="gate_thresh" type="float" default="0.001" min="0" max="1" />
+	</params>
+	<code><![CDATA[
+// Inputs
+Alpha = in1;
+Mid = in2;    // Red plane
+Flux = in3;   // Green plane (unused in basic decode)
+Side = in4;   // Blue plane
+
+// Mid/Side decoding to stereo
+Left = Mid + Side;
+Right = Mid - Side;
+
+// Optional amplitude gating based on Alpha
+Gate = Alpha > gate_thresh ? 1 : 0;
+Left = Left * Gate;
+Right = Right * Gate;
+
+// Outputs
+out1 = Left;
+out2 = Right;
+]]></code>
+</gendsp>

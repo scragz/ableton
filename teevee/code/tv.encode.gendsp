@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!DOCTYPE gendsp SYSTEM "file:gendsp.dtd">
+<gendsp>
+	<title>tv.encode</title>
+	<description>Audio encoder: L/R stereo to A/R/G/B planes</description>
+	<inlets>
+		<inlet id="0" name="Left" />
+		<inlet id="1" name="Right" />
+	</inlets>
+	<outlets>
+		<outlet id="0" name="Alpha" comment="RMS envelope" />
+		<outlet id="1" name="Red" comment="Mid signal" />
+		<outlet id="2" name="Green" comment="Spectral flux" />
+		<outlet id="3" name="Blue" comment="Side signal" />
+	</outlets>
+	<code><![CDATA[
+// Inputs
+Left = in1;
+Right = in2;
+
+// Mid/Side encoding
+Mid = (Left + Right) * 0.5;
+Side = (Left - Right) * 0.5;
+
+// Alpha: smoothed RMS envelope (attack 10, release 100)
+Alpha = slide(abs(Mid), 10, 100);
+
+// Green: spectral flux (difference from previous sample)
+History prev_mid(0);
+Flux = abs(Mid - prev_mid);
+prev_mid = Mid;
+
+// Outputs
+out1 = Alpha;  // Alpha plane
+out2 = Mid;    // Red plane
+out3 = Flux;   // Green plane
+out4 = Side;   // Blue plane
+]]></code>
+</gendsp>

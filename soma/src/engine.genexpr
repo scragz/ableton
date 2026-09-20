@@ -1,0 +1,185 @@
+// All three oscillators advance together. Feedback uses previous internal sample.
+// The containing poly~ runs at 4x the host sample rate.
+// Modulation source menus: 0 off, 1 left sine, 2 center sine, 3 center cosine, 4 right sine, 5 LFO, 6 gate envelope.
+source(which, l, c, q, r, modulator, envelope) {
+    return selector(which+1, 0, l, c, q, r, modulator, envelope);
+}
+shape_wave(phaseMinus, phasePlus, barePhase, shape, squareDry) {
+    p = wrap(phaseMinus, 0, 1);
+    t = wrap(phasePlus+0.25, 0, 1);
+    s = wrap(squareDry > 0 ? barePhase : phaseMinus, 0, 1);
+    return selector(shape+1, sin(p*twopi), 1-4*abs(t-0.5), 2*p-1, s<0.5 ? 1 : -1);
+}
+// __PARAMETERS__
+Param midi_note(48);
+Param velocity(0.8);
+Param trigger(0);
+Param bend(0);
+Param panic(0);
+History pl(0.17);
+History pc(0);
+History pr(0.43);
+History sl(0);
+History sc(0);
+History qc(1);
+History sr(0);
+History filterL(0);
+History filterR(0);
+History filterC(0);
+History phaseLFO(0);
+History previousTrigger(0);
+History previousPanic(0);
+History pitch(48);
+History previousCenterPhase(0);
+// Low-pass gate state: pending hit energy, fast drop, slow tail, smoothed Ctrl, stereo 2-pole filter.
+History strike(0);
+History gateFast(0);
+History gateSlow(0);
+History ctrlLevel(0);
+History lpgL1(0);
+History lpgL2(0);
+History lpgR1(0);
+History lpgR2(0);
+// 5 ms one-pole parameter smoothing (built-in slide keeps state per call site).
+smoothSamples = 0.005*samplerate;
+
+// MIDI note-ons HIT the gate and the last note sets pitch. Nothing holds the gate: raise Open to drone.
+newHit = trigger != previousTrigger;
+previousTrigger = trigger;
+if (panic != previousPanic) { strike=0; gateFast=0; gateSlow=0; }
+previousPanic = panic;
+pitch = glide_ms > 0 ? pitch+(midi_note-pitch)*(1-exp(-1/max(1,glide_ms*0.001*samplerate))) : midi_note;
+
+// Low-pass gate after the Natural Gate manual's description (a sketch of its behavior, not a circuit model).
+// Material sets attack time and hit strength: Hard is fast and bright, Soft is slow, muffled, and quieter.
+// Attacks stay at 2 ms or longer so even Hard strikes don't click.
+materialAttack = selector(lpg_material+1, 0.002, 0.006, 0.018);
+materialStrength = selector(lpg_material+1, 1, 0.85, 0.62);
+// Hits add to energy still ringing, so fast repeats open the gate further, but each hit adds less
+// the more open the gate already is, so repeats never slam past fully open.
+if (newHit) { strike = min(1, strike + materialStrength*(0.3+0.7*velocity)*(1-0.6*min(1, gateFast+gateSlow))); }
+charge = strike*(1-exp(-1/max(1, materialAttack*samplerate)));
+strike = strike-charge;
+// Higher notes ring shorter. Short decays are mostly the sharp drop; long decays keep more slow tail.
+decaySeconds = lpg_decay*0.001*pow(2, -(pitch-60)/24);
+tailShare = clamp(0.25+0.12*log(decaySeconds/0.1), 0.15, 0.7);
+gateFast = gateFast*exp(-1/max(1, decaySeconds*0.18*samplerate)) + charge*(1-tailShare);
+gateSlow = gateSlow*exp(-1/max(1, decaySeconds*samplerate)) + charge*tailShare;
+// Snap the exponential tails to zero before they become denormals.
+gateFast = gateFast < 1e-9 ? 0 : gateFast;
+gateSlow = gateSlow < 1e-9 ? 0 : gateSlow;
+gateEnv = clamp(gateFast+gateSlow, 0, 1);
+// Ctrl is pre-envelope and can pull below closed, clipping the tail. Open is post-envelope;
+// fully up holds the gate open.
+ctrlLevel = ctrlLevel+(lpg_ctrl-ctrlLevel)*(1-exp(-1/(0.02*samplerate)));
+openAmount = slide(lpg_open, smoothSamples, smoothSamples);
+gateControl = clamp(gateFast+gateSlow+ctrlLevel, 0, 1);
+gateControl = gateControl+openAmount*(1-gateControl);
+
+root = mtof(pitch + slide(bend*bend_range + transpose, smoothSamples, smoothSamples));
+phaseLFO = wrap(phaseLFO + lfo_hz/samplerate, 0, 1);
+lfo = sin(phaseLFO*twopi);
+// Gate Mod Depth: 0 keeps FM and center phase-mod depth fixed; 1 scales them by the gate envelope,
+// so harmonics bloom on each hit and fade with the ring.
+indexEnvelope = mix(1, gateEnv, slide(index_env, smoothSamples, smoothSamples));
+ratioSignal = selector(ratio_source+1, 0, lfo, gateEnv);
+ratioOffsetL = round(ratioSignal*ratio_depth_l);
+ratioOffsetR = round(ratioSignal*ratio_depth_r);
+lmult = clamp(mult_l + (ratio_target_l > 0 ? ratioOffsetL : 0), 1, 32);
+ldivisor = clamp(div_l + (ratio_target_l == 0 ? ratioOffsetL : 0), 1, 32);
+rmult = clamp(mult_r + (ratio_target_r > 0 ? ratioOffsetR : 0), 1, 32);
+rdivisor = clamp(div_r + (ratio_target_r == 0 ? ratioOffsetR : 0), 1, 32);
+// The center always runs free from the MIDI pitch. Outer oscillators run free (Type Hi) or follow the
+// center's base frequency at their Mult/Div ratio (Type Ratio).
+baseC = root*pow(2,slide(tune_c+fine_c/100, smoothSamples, smoothSamples)/12);
+baseL = type_l == 1 ? baseC*lmult/ldivisor : root*pow(2,slide(tune_l+fine_l/100, smoothSamples, smoothSamples)/12);
+baseR = type_r == 1 ? baseC*rmult/rdivisor : root*pow(2,slide(tune_r+fine_r/100, smoothSamples, smoothSamples)/12);
+baseC = clamp(baseC,0.001,samplerate*0.2);
+baseL = clamp(baseL,0.001,samplerate*0.2);
+baseR = clamp(baseR,0.001,samplerate*0.2);
+fmL = source(src_fm_l,sl,sc,qc,sr,lfo,gateEnv);
+fmR = source(src_fm_r,sl,sc,qc,sr,lfo,gateEnv);
+fmCraw = source(src_fm_c,sl,sc,qc,sr,lfo,gateEnv);
+pmLraw = source(src_pm_l,sl,sc,qc,sr,lfo,gateEnv);
+pmRraw = source(src_pm_r,sl,sc,qc,sr,lfo,gateEnv);
+pmC1 = source(src_pm_c1,sl,sc,qc,sr,lfo,gateEnv);
+pmC2 = source(src_pm_c2,sl,sc,qc,sr,lfo,gateEnv);
+filterCoefficient = 1-exp(-twopi*(filter_mode==0 ? 3000 : 6000)/samplerate);
+filterL = filterL + filterCoefficient*(pmLraw-filterL);
+filterR = filterR + filterCoefficient*(pmRraw-filterR);
+filterC = filterC + filterCoefficient*(fmCraw-filterC);
+depthL = slide(fm_l, smoothSamples, smoothSamples)*indexEnvelope;
+depthR = slide(fm_r, smoothSamples, smoothSamples)*indexEnvelope;
+depthC = slide(fm_c, smoothSamples, smoothSamples)*indexEnvelope;
+// Linear FM spans +/- 8x base frequency at full depth; exponential spans 4 octaves.
+// In Ratio mode an outer oscillator's Exp/PM setting turns its FM into phase modulation instead.
+freqL = fm_mode_l==0 ? baseL*(1+8*depthL*fmL) : (type_l==1 ? baseL : baseL*pow(2,4*depthL*fmL));
+freqR = fm_mode_r==0 ? baseR*(1+8*depthR*fmR) : (type_r==1 ? baseR : baseR*pow(2,4*depthR*fmR));
+freqC = fm_mode_c==0 ? baseC*(1+8*depthC*filterC) : baseC*pow(2,4*depthC*filterC);
+// Phase indexes use a squared taper up to one cycle of deviation: sine PM is already rich at a fraction of a
+// cycle, so a linear knob put all the tonal range in its first tenth and jumped straight to noise.
+phaseIndexL = slide(pm_l, smoothSamples, smoothSamples);
+phaseIndexR = slide(pm_r, smoothSamples, smoothSamples);
+pmL = phaseIndexL*phaseIndexL*filterL + (fm_mode_l==1 && type_l==1 ? 2*depthL*fmL : 0);
+pmR = phaseIndexR*phaseIndexR*filterR + (fm_mode_r==1 && type_r==1 ? 2*depthR*fmR : 0);
+phaseIndexC1 = slide(pm_c1, smoothSamples, smoothSamples);
+phaseIndexC2 = slide(pm_c2, smoothSamples, smoothSamples);
+pmC = indexEnvelope*(phaseIndexC1*phaseIndexC1*pmC1+phaseIndexC2*phaseIndexC2*pmC2);
+// Hard sync is optional on free outer oscillators. Ratios never phase-reset.
+centerWrap = pc < previousCenterPhase;
+previousCenterPhase = pc;
+if (sync_outer > 0 && centerWrap) {
+    if (type_l != 1) { pl=0; }
+    if (type_r != 1) { pr=0; }
+}
+pl = wrap(pl+clamp(freqL/samplerate,-0.45,0.45),0,1);
+pc = wrap(pc+clamp(freqC/samplerate,-0.45,0.45),0,1);
+pr = wrap(pr+clamp(freqR/samplerate,-0.45,0.45),0,1);
+signPM = phase_direction==0 ? -1 : 1;
+lminus = pl+signPM*pmL;
+cminus = pc+signPM*pmC;
+rminus = pr+signPM*pmR;
+// These named taps, including center cosine, feed the next internal sample.
+sl = sin(lminus*twopi);
+sc = sin(cminus*twopi);
+qc = sin((pc+0.25+pmC)*twopi);
+sr = sin(rminus*twopi);
+// Output waveform: 0 sine/cosine, 1 saw/cosaw, 2 triangle, 3 square. Outer oscillators use the matching shape.
+outerShape = selector(output_mode+1, 0, 2, 1, 3);
+wl = shape_wave(lminus,pl+pmL,pl,outerShape,square_dry);
+wr = shape_wave(rminus,pr+pmR,pr,outerShape,square_dry);
+centerTri = shape_wave(cminus,pc+pmC,pc,1,square_dry);
+centerSquare = shape_wave(cminus,pc+pmC,pc,3,square_dry);
+centerSaw = 2*wrap(cminus,0,1)-1;
+centerCosaw = 2*wrap(pc+0.25+pmC,0,1)-1;
+centerL = selector(output_mode+1,sc,centerSaw,centerTri,centerSquare);
+centerR = selector(output_mode+1,qc,centerCosaw,centerTri,centerSquare);
+// Mix knobs always blend the output: each side hears the center and its own outer oscillator,
+// plus a little of the far side.
+levelL = slide(level_l, smoothSamples, smoothSamples);
+levelC = slide(level_c, smoothSamples, smoothSamples);
+levelR = slide(level_r, smoothSamples, smoothSamples);
+rawL = levelC*centerL + levelL*wl + 0.25*levelR*wr;
+rawR = levelC*centerR + levelR*wr + 0.25*levelL*wl;
+mid = (rawL+rawR)*0.5;
+side = (rawL-rawR)*0.5*slide(width, smoothSamples, smoothSamples);
+// DC blocker only on audible outputs, never in the feedback network.
+cleanL = dcblock(mid+side);
+cleanR = dcblock(mid-side);
+// Filter and level both follow the gate: cutoff sweeps about 16 Hz to 20 kHz, and level follows a 1.5 power
+// curve so sine outputs, which a low-pass filter can't darken, still decay audibly instead of holding full level.
+lpgCutoff = min(16*pow(1250, gateControl), samplerate*0.45);
+lpgCoefficient = 1-exp(-twopi*lpgCutoff/samplerate);
+lpgL1 = lpgL1+lpgCoefficient*(cleanL-lpgL1);
+lpgL2 = lpgL2+lpgCoefficient*(lpgL1-lpgL2);
+lpgR1 = lpgR1+lpgCoefficient*(cleanR-lpgR1);
+lpgR2 = lpgR2+lpgCoefficient*(lpgR1-lpgR2);
+lpgLevel = pow(gateControl, 1.5);
+gain = slide(pow(10,output_db/20), smoothSamples, smoothSamples);
+out1 = clamp(lpgL2*lpgLevel*gain,-0.98,0.98);
+out2 = clamp(lpgR2*lpgLevel*gain,-0.98,0.98);
+// Panel tap: gate openness drives the indicator. The three base frequencies are diagnostic taps.
+out3 = gateControl;
+out4 = baseL;
+out5 = baseC;
+out6 = baseR;

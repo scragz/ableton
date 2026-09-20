@@ -1,0 +1,162 @@
+{
+  "name": "max-devices",
+  "about": "Stock Live look. Native live.* widgets carry no color attributes, so they follow Live's theme. jsui and plain Max objects bind to Live theme colors by name; fallback RGBA values (Live's default dark theme, as reported by Max) are only for Node tests and previews.",
+  "roles": {
+    "surface": [
+      "live_surface_bg",
+      [
+        0.278,
+        0.278,
+        0.278,
+        1
+      ]
+    ],
+    "well": [
+      "live_lcd_bg",
+      [
+        0.078,
+        0.078,
+        0.078,
+        1
+      ]
+    ],
+    "control": [
+      "live_control_bg",
+      [
+        0.263,
+        0.263,
+        0.263,
+        1
+      ]
+    ],
+    "line": [
+      "live_lcd_frame",
+      [
+        0.173,
+        0.173,
+        0.173,
+        1
+      ]
+    ],
+    "text": [
+      "live_control_fg",
+      [
+        0.851,
+        0.851,
+        0.851,
+        1
+      ]
+    ],
+    "label": [
+      "live_control_fg",
+      [
+        0.851,
+        0.851,
+        0.851,
+        1
+      ]
+    ],
+    "dim": [
+      "live_lcd_title",
+      [
+        0.745,
+        0.745,
+        0.745,
+        0.55
+      ]
+    ],
+    "accent": [
+      "live_control_selection",
+      [
+        0.902,
+        0.651,
+        0.051,
+        1
+      ]
+    ],
+    "ontext": [
+      "live_control_fg_on",
+      [
+        0.078,
+        0.078,
+        0.078,
+        1
+      ]
+    ],
+    "arc": [
+      "live_value_arc",
+      [
+        0.596,
+        0.722,
+        0.918,
+        1
+      ]
+    ],
+    "meter": [
+      "live_value_bar",
+      [
+        0.596,
+        0.722,
+        0.918,
+        1
+      ]
+    ],
+    "line1": [
+      "live_display_line_one",
+      [
+        1.0,
+        0.725,
+        0.004,
+        1
+      ]
+    ],
+    "line2": [
+      "live_display_line_two",
+      [
+        0.0,
+        0.933,
+        1.0,
+        1
+      ]
+    ],
+    "handle1": [
+      "live_display_handle_one",
+      [
+        1.0,
+        0.725,
+        0.004,
+        1
+      ]
+    ],
+    "handle2": [
+      "live_display_handle_two",
+      [
+        0.973,
+        0.463,
+        0.502,
+        1
+      ]
+    ],
+    "divider": [
+      "live_contrast_frame",
+      [
+        0.098,
+        0.098,
+        0.098,
+        1
+      ]
+    ]
+  },
+  "font": {
+    "family": "Ableton Sans Medium",
+    "label": 9,
+    "readout": 9.5
+  },
+  "fieldset": {
+    "legendInset": 6,
+    "legendFont": "Ableton Sans Bold",
+    "legendBaseline": 13,
+    "adjacent": 8,
+    "dividerInset": 4
+  }
+}

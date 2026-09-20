@@ -1,0 +1,179 @@
+// Syzygy 2 — three coupled modal bodies. Every mode owns its state.
+resonate(x, hz, seconds) {
+    History re(0);
+    History im(0);
+    w = twopi * clamp(hz, 18, samplerate * 0.44) / samplerate;
+    radius = exp(-6.907755 / (samplerate * max(seconds, 0.015)));
+    nr = radius * (cos(w) * re - sin(w) * im) + x;
+    ni = radius * (sin(w) * re + cos(w) * im);
+    re = fixdenorm(nr);
+    im = fixdenorm(ni);
+    return ni;
+}
+Param active(0, min=0, max=1);
+Param root(110, min=27.5, max=880);
+Param wood(0.8, min=0, max=1);
+Param glass(0.65, min=0, max=1);
+Param metal(0.45, min=0, max=1);
+Param decay(0.5, min=0, max=1);
+Param brightness(0.5, min=0, max=1);
+Param alignment(0.8, min=0, max=1);
+Param coupling(0.22, min=0, max=1);
+Param instability(0.12, min=0, max=1);
+Param bow(0, min=0, max=1);
+Param evolve(0, min=0, max=1);
+Param motion(0.35, min=0, max=1);
+Param cycle(18, min=3, max=90);
+Param bloom(0.45, min=0, max=1);
+Param hold(0, min=0, max=1);
+Param space(0.35, min=0, max=1);
+Param width(0.8, min=0, max=1);
+Param azimuth(0.5, min=0, max=1);
+Param elevation(0.5, min=0, max=1);
+Param output(-12, min=-60, max=0);
+Param inputgain(0.6, min=0, max=1);
+Param strikeid(0, min=0, max=1000000);
+Param target(0, min=0, max=3);
+Param velocity(0.8, min=0, max=1);
+Delay linkA(48000);
+Delay linkB(48000);
+Delay linkC(48000);
+Delay roomA(48000);
+Delay roomB(48000);
+History previousStrike(0);
+History excEnv(0);
+History phase(0);
+History driftPhase(0);
+History evolveLast(0);
+History prevA(0);
+History prevB(0);
+History prevC(0);
+History energy(0);
+History smActive(0);
+History smRoot(110);
+History smAlign(0.8);
+History smCouple(0.22);
+History smInstability(0.12);
+History smWood(0.8);
+History smGlass(0.65);
+History smMetal(0.45);
+History smDecay(0.5);
+History smBright(0.5);
+History smSpace(0.35);
+History smWidth(0.8);
+History smBow(0);
+History smOut(0);
+History smX(0.5);
+History smY(0.5);
+History smPhrase(1);
+History inputLP(0);
+History bowPhase(0);
+
+slew = 1 - exp(-1/(samplerate*0.025));
+slow = 1 - exp(-1/(samplerate*0.2));
+smActive += (active-smActive)*slew;
+smRoot += (root-smRoot)*slow;
+smAlign += (alignment-smAlign)*slow;
+smCouple += (coupling-smCouple)*slow;
+smInstability += (instability-smInstability)*slow;
+smWood += (wood-smWood)*slew;
+smGlass += (glass-smGlass)*slew;
+smMetal += (metal-smMetal)*slew;
+smDecay += (decay-smDecay)*slow;
+smBright += (brightness-smBright)*slow;
+smSpace += (space-smSpace)*slow;
+smWidth += (width-smWidth)*slew;
+smBow += (bow-smBow)*slow;
+smOut += (pow(10,output/20)-smOut)*slew;
+
+// Phrase: gather -> bloom -> fracture -> settle. Hold freezes its clock.
+advance = (1-hold) * active;
+nextPhase = phase + advance / (max(cycle,3)*samplerate);
+wrapped = nextPhase>=1;
+phase = wrap(nextPhase,0,1);
+driftPhase = wrap(driftPhase + advance*(0.006+motion*0.045)/samplerate,0,1);
+phrase = pow(max(0,sin(pi*phase)),0.7);
+smPhrase += ((evolve ? 0.12 + phrase*0.88 : 1)-smPhrase)*slow;
+autoHit = evolve * (wrapped + (evolve>evolveLast));
+evolveLast = evolve;
+manualHit = strikeid != previousStrike;
+previousStrike = strikeid;
+hit = max(manualHit*velocity,autoHit*0.55);
+excEnv = max(hit,excEnv*exp(-1/(samplerate*0.008)));
+fluct = sin(driftPhase*twopi);
+fracture = evolve * max(0,1-abs(phase-0.68)*14) * bloom * smInstability;
+micro = smInstability*(0.2 + (1-smAlign)*0.8);
+fA = smRoot * pow(2,fluct*micro*0.06);
+fB = smRoot * mix(1.423,1.5,smAlign) * pow(2,sin(driftPhase*twopi*1.37)*micro*0.09);
+fC = smRoot * mix(2.173,2,smAlign) * pow(2,sin(driftPhase*twopi*0.79)*micro*0.12);
+
+// Existing energy gates exchange gain; this regulator is inside the coupling.
+instant = (prevA*prevA+prevB*prevB+prevC*prevC)/3;
+energy += (instant-energy)*(1-exp(-1/(samplerate*(instant>energy?0.005:0.6))));
+regulation = 1/(1+energy*18);
+exchange = smCouple * (0.006 + smInstability*0.014) * regulation * smActive;
+la = linkA.read(clamp(samplerate*(0.019+fluct*micro*0.002),2,47996),interp="linear");
+lb = linkB.read(clamp(samplerate*(0.031+fluct*micro*0.003),2,47996),interp="linear");
+lc = linkC.read(clamp(samplerate*0.043,2,47996),interp="linear");
+
+inputLP += ((in1+in2)*0.5-inputLP)*(1-exp(-twopi*(700+smBright*9500)/samplerate));
+external = tanh(dcblock(inputLP))*inputgain*0.045;
+noiseInput = noise();
+excitation = hit*0.62 + noiseInput*excEnv*0.014*sqrt(44100/samplerate);
+bowPhase = wrap(bowPhase+fA/samplerate,0,1);
+bowed = smBow * smPhrase * (noiseInput*0.0035 + sin(bowPhase*twopi)*0.00015) * sqrt(44100/samplerate);
+// Individual strikes excite one body; coupling carries it into the others.
+xa = (excitation*(target<0.5 || (target>0.5 && target<1.5) || autoHit) + bowed + external + (lb*0.7-lc*0.3)*exchange)*active;
+xb = (excitation*(target<0.5 || (target>1.5 && target<2.5) || autoHit)*0.65 + bowed*0.75 + external*0.8 + (lc*0.7+la*0.3)*exchange)*active;
+xc = (excitation*(target<0.5 || target>2.5 || autoHit)*0.45 + bowed*0.6 + external*0.6 + (la*0.7-lb*0.3)*exchange)*active;
+length = (0.25+smDecay*smDecay*7)*(1+bloom*smPhrase*0.4);
+shine = 0.12+smBright*0.88;
+// Wood: sparse, rapidly damped upper modes.
+a = resonate(xa,fA,length*0.4)*0.66
+  + resonate(xa,fA*2.756,length*0.18)*0.28*shine
+  + resonate(xa,fA*5.404,length*0.09)*0.17*shine
+  + resonate(xa,fA*8.933,length*0.045)*0.09*shine;
+// Glass: clear ringing with nearly harmonic lower modes.
+b = resonate(xb,fB,length*1.35)*0.63
+  + resonate(xb,fB*mix(2.32,2,smAlign),length*0.9)*0.28*shine
+  + resonate(xb,fB*mix(4.25,4,smAlign),length*0.6)*0.18*shine
+  + resonate(xb,fB*6.79,length*0.32)*0.09*shine;
+// Metal: close modes beat, and higher partials persist.
+c = resonate(xc,fC,length*1.8)*0.52
+  + resonate(xc,fC*(1.006+micro*0.014+fracture*0.04),length*1.45)*0.24
+  + resonate(xc,fC*2.091,length*0.95)*0.3*shine
+  + resonate(xc,fC*3.807,length*0.7)*0.2*shine
+  + resonate(xc,fC*5.263,length*0.45)*0.12*shine;
+prevA = tanh(dcblock(a))*smWood;
+prevB = tanh(dcblock(b))*smGlass;
+prevC = tanh(dcblock(c))*smMetal;
+linkA.write(prevA);
+linkB.write(prevB);
+linkC.write(prevC);
+
+smX += (clamp(azimuth+fluct*motion*0.2,0,1)-smX)*slow;
+smY += (clamp(elevation+sin(driftPhase*twopi*1.19)*motion*0.2,0,1)-smY)*slow;
+panA = clamp(smX-0.28*smWidth,0,1);
+panB = clamp(smX+0.28*smWidth,0,1);
+panC = clamp(smX+(smY-0.5)*0.7*smWidth,0,1);
+left = (prevA*cos(panA*pi*0.5)+prevB*cos(panB*pi*0.5)+prevC*cos(panC*pi*0.5))*0.6;
+right = (prevA*sin(panA*pi*0.5)+prevB*sin(panB*pi*0.5)+prevC*sin(panC*pi*0.5))*0.6;
+ra = roomA.read(clamp(samplerate*0.0677,2,47996),interp="linear");
+rb = roomB.read(clamp(samplerate*0.0893,2,47996),interp="linear");
+roomA.write(tanh(left+rb*0.61)*smActive);
+roomB.write(tanh(right-ra*0.57)*smActive);
+l = left+ra*smSpace*0.5;
+r = right+rb*smSpace*0.5;
+mid = (l+r)*0.5;
+side = (l-r)*0.5*smWidth;
+finalL = tanh(dcblock(mid+side)*2.2)*0.89*smOut*smActive;
+finalR = tanh(dcblock(mid-side)*2.2)*0.89*smOut*smActive;
+
+out1=finalL;
+out2=finalR;
+out3=abs(prevA);
+out4=abs(prevB);
+out5=abs(prevC);
+out6=phase;
+out7=smX;
+out8=smY;

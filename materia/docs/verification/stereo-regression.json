@@ -1,0 +1,14 @@
+{
+  "defaults": {
+    "da_dest": 0,
+    "db_dest": 1,
+    "da_src": 9,
+    "db_src": 8,
+    "ber_mode": 0,
+    "ber_freq": 110
+  },
+  "liveDeviceId": 0,
+  "stepAt110": 0,
+  "cycleAt110": 0,
+  "stepAt40": 0
+}

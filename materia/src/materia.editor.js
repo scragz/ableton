@@ -1,0 +1,7 @@
+autowatch=1;inlets=1;outlets=1;mgraphics.init();mgraphics.relative_coords=0;mgraphics.autofill=0;
+var kind=jsarguments[1]||'table',v=[],last=-1;
+function values(){v=arrayfromargs(arguments);mgraphics.redraw();}
+function paint(){var w=box.rect[2]-box.rect[0],h=box.rect[3]-box.rect[1];mgraphics.set_source_rgba(max.getcolor('live_lcd_bg'));mgraphics.rectangle(0,0,w,h);mgraphics.fill();if(kind==='matrix'){for(var r=0;r<8;r++)for(var c=0;c<8;c++){mgraphics.set_source_rgba(max.getcolor(((v[r]||0)>>c)&1?'live_value_arc':'live_lcd_control_fg'));mgraphics.rectangle(c*w/8+1,r*h/8+1,w/8-2,h/8-2);mgraphics.fill();}}else{mgraphics.set_source_rgba(max.getcolor('live_value_arc'));mgraphics.set_line_width(1);for(var i=0;i<256;i++){var x=i*w/255,y=h-1-(v[i]||0)*(h-2)/255;if(i)mgraphics.line_to(x,y);else mgraphics.move_to(x,y);}mgraphics.stroke();}}
+function onclick(x,y){last=-1;edit(x,y);}
+function ondrag(x,y,but){if(but)edit(x,y);else last=-1;}
+function edit(x,y){var w=box.rect[2]-box.rect[0],h=box.rect[3]-box.rect[1];if(kind==='matrix'){var r=Math.max(0,Math.min(7,Math.floor(y/h*8))),c=Math.max(0,Math.min(7,Math.floor(x/w*8))),cell=r*8+c;if(cell===last)return;last=cell;outlet(0,'matrixcell',r,c);}else{var fam=this.patcher.getnamed('j_family').getvalueof();if(fam!==6)return;var t=Math.min(7,this.patcher.getnamed('j_table').getvalueof()),i=Math.max(0,Math.min(255,Math.floor(x/w*256))),value=Math.max(0,Math.min(255,Math.floor((1-y/h)*255)));outlet(0,'drawpoint',t,i,value);v[i]=value;mgraphics.redraw();}}

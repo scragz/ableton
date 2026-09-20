@@ -1,0 +1,427 @@
+// Materia v0.2 :  integer buses, simultaneous registers, explicit loop delays.
+bit8(v,b) { return mod(floor(v/pow(2,b)),2); }
+band(a,b) { return bit8(a,0)*bit8(b,0)*1 + bit8(a,1)*bit8(b,1)*2 + bit8(a,2)*bit8(b,2)*4 + bit8(a,3)*bit8(b,3)*8 + bit8(a,4)*bit8(b,4)*16 + bit8(a,5)*bit8(b,5)*32 + bit8(a,6)*bit8(b,6)*64 + bit8(a,7)*bit8(b,7)*128; }
+bor(a,b) { return a+b-band(a,b); }
+bxor(a,b) { return a+b-2*band(a,b); }
+rot8(a,n) { return mod(floor(a)*pow(2,n),256)+floor(a/pow(2,8-n)); }
+parity8(v) { t=0; for(i=0;i<8;i+=1) { t+=bit8(v,i); } return mod(t,2); }
+lcg(v) { return mod(v*1664525+1013904223,16777216); }
+Buffer state("materia_state");
+Buffer tables("materia_jena");
+Buffer matrix("materia_matrix");
+Buffer meters("materia_meters");
+Buffer exchange("materia_exchange");
+
+Param a1_in(0);
+Param a1_gain(0);
+Param a1_offset(0);
+Param a1_range(0);
+Param a1_mode(0);
+Param a1_rate(8000);
+Param a1_clk(16);
+Param a2_in(1);
+Param a2_gain(0);
+Param a2_offset(0);
+Param a2_range(0);
+Param a2_mode(0);
+Param a2_rate(8000);
+Param a2_clk(16);
+Param da_src(9);
+Param da_range(0);
+Param da_wmode(0);
+Param da_tol(5);
+Param da_seed(1);
+Param da_w0(1);
+Param da_w1(1);
+Param da_w2(1);
+Param da_w3(1);
+Param da_w4(1);
+Param da_w5(1);
+Param da_w6(1);
+Param da_w7(1);
+Param da_gain(0);
+Param da_filt(0);
+Param da_cutoff(16000);
+Param da_dc(1);
+Param da_dest(0);
+Param db_src(8);
+Param db_range(0);
+Param db_wmode(0);
+Param db_tol(5);
+Param db_seed(1);
+Param db_w0(1);
+Param db_w1(1);
+Param db_w2(1);
+Param db_w3(1);
+Param db_w4(1);
+Param db_w5(1);
+Param db_w6(1);
+Param db_w7(1);
+Param db_gain(0);
+Param db_filt(0);
+Param db_cutoff(16000);
+Param db_dc(1);
+Param db_dest(1);
+Param ber_freq(110);
+Param ber_fine(0);
+Param ber_fm(0);
+Param ber_amt(0);
+Param ber_mode(0);
+Param ber_sync(0);
+Param e1_src(1);
+Param e1_step(1);
+Param e1_dir(0);
+Param e1_gate(0);
+Param e1_bit(0);
+Param e1_reset(0);
+Param e1_rbit(0);
+Param e1_clk(4);
+Param e2_src(1);
+Param e2_step(1);
+Param e2_dir(0);
+Param e2_gate(0);
+Param e2_bit(0);
+Param e2_reset(0);
+Param e2_rbit(0);
+Param e2_clk(16);
+Param l1_src(2);
+Param l1_b0(0);
+Param l1_b1(0);
+Param l1_b2(0);
+Param l1_b3(0);
+Param l1_b4(0);
+Param l1_b5(0);
+Param l1_b6(0);
+Param l1_b7(0);
+Param l1_gate(0);
+Param l1_rot(0);
+Param l1_inv(0);
+Param l1_law(0);
+Param l2_src(3);
+Param l2_b0(0);
+Param l2_b1(0);
+Param l2_b2(0);
+Param l2_b3(0);
+Param l2_b4(0);
+Param l2_b5(0);
+Param l2_b6(0);
+Param l2_b7(0);
+Param l2_gate(0);
+Param l2_rot(0);
+Param l2_inv(0);
+Param l2_law(0);
+Param g_src(7);
+Param g_b0(1);
+Param g_b1(1);
+Param g_b2(1);
+Param g_b3(1);
+Param g_b4(1);
+Param g_b5(1);
+Param g_b6(1);
+Param g_b7(1);
+Param g_gate(0);
+Param g_rot(0);
+Param g_inv(0);
+Param g_law(0);
+Param j_src(0);
+Param j_family(0);
+Param j_table(0);
+Param j_morph(0);
+Param j_sync(0);
+Param j_clk(0);
+Param r1_src(2);
+Param r1_length(16);
+Param r1_mode(0);
+Param r1_clk(16);
+Param r1_seed(1);
+Param r2_src(0);
+Param r2_length(64);
+Param r2_mode(0);
+Param r2_clk(16);
+Param r2_seed(1);
+Param p_a(2);
+Param p_b(3);
+Param p_mode(0);
+Param p_sel(0);
+Param p_bus(0);
+Param p_bit(0);
+Param p_clk(16);
+Param m_src(0);
+Param m_mode(1);
+Param m_preset(0);
+Param m_seed(1);
+Param t1_src(6);
+Param t1_kind(1);
+Param t1_bit(0);
+Param t1_mask(0);
+Param t1_depth(1);
+Param t1_min(0);
+Param t1_max(1);
+Param t2_src(6);
+Param t2_kind(1);
+Param t2_bit(1);
+Param t2_mask(0);
+Param t2_depth(1);
+Param t2_min(0);
+Param t2_max(1);
+Param t3_src(6);
+Param t3_kind(1);
+Param t3_bit(2);
+Param t3_mask(0);
+Param t3_depth(1);
+Param t3_min(0);
+Param t3_max(1);
+Param t4_src(6);
+Param t4_kind(1);
+Param t4_bit(3);
+Param t4_mask(0);
+Param t4_depth(1);
+Param t4_min(0);
+Param t4_max(1);
+Param race_mode(0);
+Param constant(0);
+Param tclk_div(2);
+Param iclk_rate(8);
+Param load_mode(0);
+Param recall_on_play(0);
+Param playing(0);
+Param vector_size(64);
+Param restore_request(0);
+Param snap_request(0);
+Param clear1(0);
+Param clear2(0);
+Param ready(0);
+Param delay_l1_src(0);
+Param delay_l1_gate(0);
+Param delay_l2_src(0);
+Param delay_l2_gate(0);
+Param delay_g_src(0);
+Param delay_g_gate(0);
+Param delay_j_src(0);
+Param delay_p_a(0);
+Param delay_p_b(0);
+Param delay_p_bus(0);
+Param delay_m_src(0);
+// Restore mailbox is written completely before its request token is changed.
+if (restore_request != peek(exchange, 0, 0)) {
+ for(i=0;i<320;i+=1) { poke(state,peek(exchange,32+i,0),i,0); }
+ poke(exchange,restore_request,0,0);
+}
+start=playing>0 && peek(state,242,0)==0;
+if(start && recall_on_play>0 && peek(exchange, 4+floor(recall_on_play),0)>0) {
+ slotbase=1024+floor(recall_on_play-1)*320;
+ for(i=0;i<320;i+=1) { poke(state,peek(exchange,slotbase+i,0),i,0); }
+}
+poke(state,playing,242,0);
+
+if(clear1 != peek(state, 250, 0)) { for(i=0;i<64;i+=1) { poke(state, 0, i, 0); } poke(state, 0, 64, 0); poke(state, 0, 65, 0); poke(state, clear1, 250, 0); }
+if(clear2 != peek(state, 251, 0)) { for(i=66;i<130;i+=1) { poke(state, 0, i, 0); } poke(state, 0, 130, 0); poke(state, 0, 131, 0); poke(state, clear2, 251, 0); }
+rng=peek(state,143,0); jv=0; daone=0; dbone=0;
+d0=0; c0=0;
+d1=0; c1=0;
+d2=0; c2=0;
+d3=0; c3=0;
+d4=0; c4=0;
+d5=0; c5=0;
+d6=0; c6=0;
+d7=0; c7=0;
+d8=0; c8=0;
+d9=0; c9=0;
+d10=0; c10=0;
+d11=0; c11=0;
+d12=0; c12=0;
+d13=0; c13=0;
+d14=0; c14=0;
+d15=0; c15=0;
+d16=0; c16=0;
+d17=0; c17=0;
+d18=0; c18=0;
+d19=0; c19=0;
+d20=0; c20=0;
+d21=0; c21=0;
+d1=floor(constant);
+c16=playing>0 && in3<0.5; ip=wrap(peek(state,220,0)+min(iclk_rate,samplerate/2)/samplerate,0,1); poke(state,ip,220,0); c17=ip<0.5;
+d2=peek(state,163,0); c2=peek(state,185,0);
+d3=peek(state,164,0); c3=peek(state,186,0);
+d4=peek(state,165,0); c4=peek(state,187,0);
+d5=peek(state,166,0); c5=peek(state,188,0);
+d6=peek(state,167,0); c6=peek(state,189,0);
+d7=peek(state,168,0); c7=peek(state,190,0);
+d8=peek(state,169,0); c8=peek(state,191,0);
+d9=peek(state,170,0); c9=peek(state,192,0);
+d10=peek(state,171,0); c10=peek(state,193,0);
+d11=peek(state,172,0); c11=peek(state,194,0);
+d12=peek(state,173,0); c12=peek(state,195,0);
+d13=peek(state,174,0); c13=peek(state,196,0);
+d14=peek(state,175,0); c14=peek(state,197,0);
+d15=peek(state,176,0); c15=peek(state,198,0);
+bs=selector(floor(ber_sync)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21); bp=peek(state, 140, 0)+ peek(state, 221, 0) / 16777216+ peek(state, 222, 0) / 281474976710656; fm=selector(floor(ber_fm)+1,0,peek(state, 218, 0),peek(state, 219, 0),(in1+in2)*0.5); bf=clamp(ber_freq*pow(2,ber_fine/1200)*pow(2,fm*ber_amt*4),0,samplerate/2); bp=wrap(bp+bf/samplerate,0,1); if(bs>0 && peek(state, 145, 0)==0) {bp=0;} poke(state, bs, 145, 0);
+bhi=floor(bp*16777216)/16777216; bmid=floor((bp-bhi)*281474976710656)/16777216; blo=(bp-bhi-bmid/16777216)*281474976710656; poke(state,bhi,140,0); poke(state,bmid,221,0); poke(state,blo,222,0); d4=floor(bp*256); c4=ber_mode==0  ?  (bf*256>samplerate/2  ?  1- peek(state,187,0)  :  mod(floor(bp*512),2))  :  bp<0.5;
+a1x=(selector(floor(a1_in)+1,in1,in2,(in1+in2)*0.5,(in1-in2)*0.5)+a1_offset)*pow(10,a1_gain/20); a1u=a1_range==0  ?  (a1x+1)*0.5  :  a1x; a1q=floor(clamp(a1u,0,1)*255+0.5); a1ph=wrap(peek(state, 223, 0)+min(a1_rate,samplerate/2)/samplerate,0,1); poke(state, a1ph, 223, 0); c2=selector(floor(a1_mode)+1,1- peek(state, 146, 0), a1ph<0.5, selector(floor(a1_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21), a1x>=0); d2=peek(state, 136, 0);
+a2x=(selector(floor(a2_in)+1,in1,in2,(in1+in2)*0.5,(in1-in2)*0.5)+a2_offset)*pow(10,a2_gain/20); a2u=a2_range==0  ?  (a2x+1)*0.5  :  a2x; a2q=floor(clamp(a2u,0,1)*255+0.5); a2ph=wrap(peek(state, 226, 0)+min(a2_rate,samplerate/2)/samplerate,0,1); poke(state, a2ph, 226, 0); c3=selector(floor(a2_mode)+1,1- peek(state, 147, 0), a2ph<0.5, selector(floor(a2_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21), a2x>=0); d3=peek(state, 137, 0);
+d5=peek(state, 132, 0); c5=selector(floor(e1_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21); c18=peek(state, 133, 0);
+d6=peek(state, 134, 0); c6=selector(floor(e2_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21); c19=peek(state, 135, 0);
+d11=peek(state, 65, 0); c11=selector(floor(r1_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21);
+d12=peek(state, 131, 0); c12=selector(floor(r2_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21);
+// pre :  six relaxations plus one convergence check.
+race_pre=0;
+for (pass=0; pass<7; pass+=1) {
+old_d7=d7; old_c7=c7;
+old_d8=d8; old_c8=c8;
+old_d9=d9; old_c9=c9;
+old_d10=d10; old_c10=c10;
+old_d13=d13; old_c13=c13;
+old_d14=d14; old_c14=c14;
+old_d15=d15; old_c15=c15;
+l1gv=rot8(((race_mode == 0 && delay_l1_gate > 0)  ?  peek(state, 161+floor(l1_gate), 0)  :  selector(floor(l1_gate)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)), floor(l1_rot)); l1gv=bxor(l1gv, l1_inv > 0  ?  255  :  0);
+l1sm=floor(l1_b0)*1 + floor(l1_b1)*2 + floor(l1_b2)*4 + floor(l1_b3)*8 + floor(l1_b4)*16 + floor(l1_b5)*32 + floor(l1_b6)*64 + floor(l1_b7)*128;
+l1mask=l1_law == 0  ?  bor(l1sm,l1gv)  :  bxor(l1sm,l1gv); d7=bxor(((race_mode == 0 && delay_l1_src > 0)  ?  peek(state, 161+floor(l1_src), 0)  :  selector(floor(l1_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)),l1mask);
+c7=((race_mode == 0 && delay_l1_src > 0)  ?  peek(state, 183+floor(l1_src), 0)  :  selector(floor(l1_src)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21));
+l2gv=rot8(((race_mode == 0 && delay_l2_gate > 0)  ?  peek(state, 161+floor(l2_gate), 0)  :  selector(floor(l2_gate)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)), floor(l2_rot)); l2gv=bxor(l2gv, l2_inv > 0  ?  255  :  0);
+l2sm=floor(l2_b0)*1 + floor(l2_b1)*2 + floor(l2_b2)*4 + floor(l2_b3)*8 + floor(l2_b4)*16 + floor(l2_b5)*32 + floor(l2_b6)*64 + floor(l2_b7)*128;
+l2mask=l2_law == 0  ?  bor(l2sm,l2gv)  :  bxor(l2sm,l2gv); d8=bxor(((race_mode == 0 && delay_l2_src > 0)  ?  peek(state, 161+floor(l2_src), 0)  :  selector(floor(l2_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)),l2mask);
+c8=((race_mode == 0 && delay_l2_src > 0)  ?  peek(state, 183+floor(l2_src), 0)  :  selector(floor(l2_src)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21));
+ggv=rot8(((race_mode == 0 && delay_g_gate > 0)  ?  peek(state, 161+floor(g_gate), 0)  :  selector(floor(g_gate)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)), floor(g_rot)); ggv=bxor(ggv, g_inv > 0  ?  255  :  0);
+gsm=floor(g_b0)*1 + floor(g_b1)*2 + floor(g_b2)*4 + floor(g_b3)*8 + floor(g_b4)*16 + floor(g_b5)*32 + floor(g_b6)*64 + floor(g_b7)*128;
+gmask=bor(gsm,ggv); gx=((race_mode == 0 && delay_g_src > 0)  ?  peek(state, 161+floor(g_src), 0)  :  selector(floor(g_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)); d9=selector(floor(g_law)+1, band(gx,gmask),bor(gx,gmask),bxor(gx,gmask),255-band(gx,gmask));
+c9=((race_mode == 0 && delay_g_src > 0)  ?  peek(state, 183+floor(g_src), 0)  :  selector(floor(g_src)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21));
+jx=((race_mode == 0 && delay_j_src > 0)  ?  peek(state, 161+floor(j_src), 0)  :  selector(floor(j_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)); jf=floor(j_family); jcount=selector(jf+1,16,32,256,256,32,64,8); jt=min(floor(j_table),jcount-1); jo=selector(jf+1,0,4096,12288,77824,143360,151552,167936); jv=floor(mix(peek(tables,jo+jt*256+jx,0),peek(tables,jo+min(jt+1,jcount-1)*256+jx,0),j_morph)+0.5); d10=j_sync>0  ?  peek(state, 138, 0)  :  clamp(jv,0,255); c10=((race_mode == 0 && delay_j_src > 0)  ?  peek(state, 183+floor(j_src), 0)  :  selector(floor(j_src)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21));
+ps=p_mode==0  ?  floor(p_sel)  :  (p_mode==2  ?  peek(state, 139, 0)  :  bit8(((race_mode == 0 && delay_p_bus > 0)  ?  peek(state, 161+floor(p_bus), 0)  :  selector(floor(p_bus)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)),floor(p_bit)));
+pa=((race_mode == 0 && delay_p_a > 0)  ?  peek(state, 161+floor(p_a), 0)  :  selector(floor(p_a)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)); pb=((race_mode == 0 && delay_p_b > 0)  ?  peek(state, 161+floor(p_b), 0)  :  selector(floor(p_b)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)); pac=((race_mode == 0 && delay_p_a > 0)  ?  peek(state, 183+floor(p_a), 0)  :  selector(floor(p_a)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21)); pbc=((race_mode == 0 && delay_p_b > 0)  ?  peek(state, 183+floor(p_b), 0)  :  selector(floor(p_b)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21)); d13=ps>0  ?  pb  :  pa; d14=ps>0  ?  pa  :  pb; c13=ps>0  ?  pbc  :  pac; c14=ps>0  ?  pac  :  pbc;
+mx=((race_mode == 0 && delay_m_src > 0)  ?  peek(state, 161+floor(m_src), 0)  :  selector(floor(m_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)); d15=0; for(mi=0;mi<8;mi+=1) { mv=band(mx,peek(matrix,mi,0)); mb=m_mode==0  ?  (mv>0)  :  parity8(mv); d15+=mb*pow(2,mi); } c15=((race_mode == 0 && delay_m_src > 0)  ?  peek(state, 183+floor(m_src), 0)  :  selector(floor(m_src)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21));
+changed=(old_d7!=d7 || old_c7!=c7) || (old_d8!=d8 || old_c8!=c8) || (old_d9!=d9 || old_c9!=c9) || (old_d10!=d10 || old_c10!=c10) || (old_d13!=d13 || old_c13!=c13) || (old_d14!=d14 || old_c14!=c14) || (old_d15!=d15 || old_c15!=c15); if (!changed) { break; }
+if (pass==6) {
+rd=bxor(old_d7,d7); rc=old_c7!=c7; race_pre=max(race_pre,rd>0 || rc); if(race_mode==2 && (rd>0 || rc)) { rng=lcg(rng); d7=bxor(band(d7,255-rd),band(floor(rng/65536),rd)); c7=rc  ?  bit8(floor(rng/65536),0)  :  c7; }
+rd=bxor(old_d8,d8); rc=old_c8!=c8; race_pre=max(race_pre,rd>0 || rc); if(race_mode==2 && (rd>0 || rc)) { rng=lcg(rng); d8=bxor(band(d8,255-rd),band(floor(rng/65536),rd)); c8=rc  ?  bit8(floor(rng/65536),0)  :  c8; }
+rd=bxor(old_d9,d9); rc=old_c9!=c9; race_pre=max(race_pre,rd>0 || rc); if(race_mode==2 && (rd>0 || rc)) { rng=lcg(rng); d9=bxor(band(d9,255-rd),band(floor(rng/65536),rd)); c9=rc  ?  bit8(floor(rng/65536),0)  :  c9; }
+rd=bxor(old_d10,d10); rc=old_c10!=c10; race_pre=max(race_pre,rd>0 || rc); if(race_mode==2 && (rd>0 || rc)) { rng=lcg(rng); d10=bxor(band(d10,255-rd),band(floor(rng/65536),rd)); c10=rc  ?  bit8(floor(rng/65536),0)  :  c10; }
+rd=bxor(old_d13,d13); rc=old_c13!=c13; race_pre=max(race_pre,rd>0 || rc); if(race_mode==2 && (rd>0 || rc)) { rng=lcg(rng); d13=bxor(band(d13,255-rd),band(floor(rng/65536),rd)); c13=rc  ?  bit8(floor(rng/65536),0)  :  c13; }
+rd=bxor(old_d14,d14); rc=old_c14!=c14; race_pre=max(race_pre,rd>0 || rc); if(race_mode==2 && (rd>0 || rc)) { rng=lcg(rng); d14=bxor(band(d14,255-rd),band(floor(rng/65536),rd)); c14=rc  ?  bit8(floor(rng/65536),0)  :  c14; }
+rd=bxor(old_d15,d15); rc=old_c15!=c15; race_pre=max(race_pre,rd>0 || rc); if(race_mode==2 && (rd>0 || rc)) { rng=lcg(rng); d15=bxor(band(d15,255-rd),band(floor(rng/65536),rd)); c15=rc  ?  bit8(floor(rng/65536),0)  :  c15; }
+} }
+c5=selector(floor(e1_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21);
+c6=selector(floor(e2_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21);
+c11=selector(floor(r1_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21);
+c12=selector(floor(r2_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21);
+if(a1_mode==2) { c2=selector(floor(a1_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21); } na1=(a1_mode==0 || (c2>0 && peek(state, 146, 0)==0))  ?  a1q  :  d2;
+if(a2_mode==2) { c3=selector(floor(a2_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21); } na2=(a2_mode==0 || (c3>0 && peek(state, 147, 0)==0))  ?  a2q  :  d3;
+e1c=selector(floor(e1_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21); e1re=bit8(selector(floor(e1_reset)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21),floor(e1_rbit)); ne1=peek(state, 132, 0); ne1o=peek(state, 133, 0); if(e1c>0 && peek(state, 148, 0)==0) { if(e1re>0 && peek(state, 149, 0)==0) {ne1=0;} e1s=e1_src==1  ?  floor(e1_step)  :  selector(floor(e1_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21); e1up=bxor(e1_dir==0,bit8(selector(floor(e1_gate)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21),floor(e1_bit))); e1sum=ne1+(e1up>0  ?  e1s  :  -e1s); ne1=mod(e1sum+256,256); ne1o=e1sum<0 || e1sum>255; }
+e2c=selector(floor(e2_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21); e2re=bit8(selector(floor(e2_reset)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21),floor(e2_rbit)); ne2=peek(state, 134, 0); ne2o=peek(state, 135, 0); if(e2c>0 && peek(state, 150, 0)==0) { if(e2re>0 && peek(state, 151, 0)==0) {ne2=0;} e2s=e2_src==1  ?  floor(e2_step)  :  selector(floor(e2_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21); e2up=bxor(e2_dir==0,bit8(selector(floor(e2_gate)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21),floor(e2_bit))); e2sum=ne2+(e2up>0  ?  e2s  :  -e2s); ne2=mod(e2sum+256,256); ne2o=e2sum<0 || e2sum>255; }
+r1c=selector(floor(r1_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21); r1edge=r1c>0 && peek(state, 152, 0)==0; nr1=peek(state, 65, 0); r1w=peek(state, 64, 0); r1rng=peek(state, 141, 0); r1input=selector(floor(r1_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21); if(r1_seed!= peek(state, 253, 0)) { r1rng=floor(r1_seed); } r1store=0; r1value=0; if(r1edge && r1_mode!=3) { r1delay=floor(r1_length); if(r1_mode==2) { r1rng=lcg(r1rng); r1delay=1+mod(r1rng,r1delay); } nr1=r1_mode==0  ?  (r1delay==1  ?  r1input  :  peek(state,0+mod(r1w-r1delay+65,64),0))  :  peek(state,0+mod(r1w-r1delay+64,64),0); r1value=r1_mode==1  ?  nr1  :  r1input; r1store=1; }
+r2c=selector(floor(r2_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21); r2edge=r2c>0 && peek(state, 153, 0)==0; nr2=peek(state, 131, 0); r2w=peek(state, 130, 0); r2rng=peek(state, 142, 0); r2input=selector(floor(r2_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21); if(r2_seed!= peek(state, 254, 0)) { r2rng=floor(r2_seed); } r2store=0; r2value=0; if(r2edge && r2_mode!=3) { r2delay=floor(r2_length); if(r2_mode==2) { r2rng=lcg(r2rng); r2delay=1+mod(r2rng,r2delay); } nr2=r2_mode==0  ?  (r2delay==1  ?  r2input  :  peek(state,66+mod(r2w-r2delay+65,64),0))  :  peek(state,66+mod(r2w-r2delay+64,64),0); r2value=r2_mode==1  ?  nr2  :  r2input; r2store=1; }
+jc=selector(floor(j_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21); nj=(j_sync>0 && jc>0 && peek(state, 154, 0)==0)  ?  jv  :  peek(state, 138, 0); pc=selector(floor(p_clk)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21); np=(p_mode==2 && pc>0 && peek(state, 155, 0)==0)  ?  bit8(selector(floor(p_bus)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21),floor(p_bit))  :  peek(state, 139, 0);
+// Simultaneous commit :  no register sees another register's new data.
+poke(state, na1, 136, 0);poke(state, c2, 146, 0);d2=na1;
+poke(state, na2, 137, 0);poke(state, c3, 147, 0);d3=na2;
+poke(state, ne1, 132, 0);poke(state, ne1o, 133, 0);poke(state, e1c, 148, 0);poke(state, e1re, 149, 0);d5=ne1; c5=e1c; c18=ne1o;
+poke(state, ne2, 134, 0);poke(state, ne2o, 135, 0);poke(state, e2c, 150, 0);poke(state, e2re, 151, 0);d6=ne2; c6=e2c; c19=ne2o;
+if(r1store) { poke(state,r1value,0+r1w,0); poke(state, mod(r1w+1,64), 64, 0); } poke(state, nr1, 65, 0);poke(state, r1c, 152, 0);poke(state, r1rng, 141, 0);poke(state, r1_seed, 253, 0);d11=nr1; c11=r1c;
+if(r2store) { poke(state,r2value,66+r2w,0); poke(state, mod(r2w+1,64), 130, 0); } poke(state, nr2, 131, 0);poke(state, r2c, 153, 0);poke(state, r2rng, 142, 0);poke(state, r2_seed, 254, 0);d12=nr2; c12=r2c;
+poke(state, nj, 138, 0);poke(state, np, 139, 0);poke(state, jc, 154, 0);poke(state, pc, 155, 0);
+// post :  six relaxations plus one convergence check.
+race_post=0;
+for (pass=0; pass<7; pass+=1) {
+old_d7=d7; old_c7=c7;
+old_d8=d8; old_c8=c8;
+old_d9=d9; old_c9=c9;
+old_d10=d10; old_c10=c10;
+old_d13=d13; old_c13=c13;
+old_d14=d14; old_c14=c14;
+old_d15=d15; old_c15=c15;
+l1gv=rot8(((race_mode == 0 && delay_l1_gate > 0)  ?  peek(state, 161+floor(l1_gate), 0)  :  selector(floor(l1_gate)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)), floor(l1_rot)); l1gv=bxor(l1gv, l1_inv > 0  ?  255  :  0);
+l1sm=floor(l1_b0)*1 + floor(l1_b1)*2 + floor(l1_b2)*4 + floor(l1_b3)*8 + floor(l1_b4)*16 + floor(l1_b5)*32 + floor(l1_b6)*64 + floor(l1_b7)*128;
+l1mask=l1_law == 0  ?  bor(l1sm,l1gv)  :  bxor(l1sm,l1gv); d7=bxor(((race_mode == 0 && delay_l1_src > 0)  ?  peek(state, 161+floor(l1_src), 0)  :  selector(floor(l1_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)),l1mask);
+c7=((race_mode == 0 && delay_l1_src > 0)  ?  peek(state, 183+floor(l1_src), 0)  :  selector(floor(l1_src)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21));
+l2gv=rot8(((race_mode == 0 && delay_l2_gate > 0)  ?  peek(state, 161+floor(l2_gate), 0)  :  selector(floor(l2_gate)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)), floor(l2_rot)); l2gv=bxor(l2gv, l2_inv > 0  ?  255  :  0);
+l2sm=floor(l2_b0)*1 + floor(l2_b1)*2 + floor(l2_b2)*4 + floor(l2_b3)*8 + floor(l2_b4)*16 + floor(l2_b5)*32 + floor(l2_b6)*64 + floor(l2_b7)*128;
+l2mask=l2_law == 0  ?  bor(l2sm,l2gv)  :  bxor(l2sm,l2gv); d8=bxor(((race_mode == 0 && delay_l2_src > 0)  ?  peek(state, 161+floor(l2_src), 0)  :  selector(floor(l2_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)),l2mask);
+c8=((race_mode == 0 && delay_l2_src > 0)  ?  peek(state, 183+floor(l2_src), 0)  :  selector(floor(l2_src)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21));
+ggv=rot8(((race_mode == 0 && delay_g_gate > 0)  ?  peek(state, 161+floor(g_gate), 0)  :  selector(floor(g_gate)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)), floor(g_rot)); ggv=bxor(ggv, g_inv > 0  ?  255  :  0);
+gsm=floor(g_b0)*1 + floor(g_b1)*2 + floor(g_b2)*4 + floor(g_b3)*8 + floor(g_b4)*16 + floor(g_b5)*32 + floor(g_b6)*64 + floor(g_b7)*128;
+gmask=bor(gsm,ggv); gx=((race_mode == 0 && delay_g_src > 0)  ?  peek(state, 161+floor(g_src), 0)  :  selector(floor(g_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)); d9=selector(floor(g_law)+1, band(gx,gmask),bor(gx,gmask),bxor(gx,gmask),255-band(gx,gmask));
+c9=((race_mode == 0 && delay_g_src > 0)  ?  peek(state, 183+floor(g_src), 0)  :  selector(floor(g_src)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21));
+jx=((race_mode == 0 && delay_j_src > 0)  ?  peek(state, 161+floor(j_src), 0)  :  selector(floor(j_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)); jf=floor(j_family); jcount=selector(jf+1,16,32,256,256,32,64,8); jt=min(floor(j_table),jcount-1); jo=selector(jf+1,0,4096,12288,77824,143360,151552,167936); jv=floor(mix(peek(tables,jo+jt*256+jx,0),peek(tables,jo+min(jt+1,jcount-1)*256+jx,0),j_morph)+0.5); d10=j_sync>0  ?  peek(state, 138, 0)  :  clamp(jv,0,255); c10=((race_mode == 0 && delay_j_src > 0)  ?  peek(state, 183+floor(j_src), 0)  :  selector(floor(j_src)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21));
+ps=p_mode==0  ?  floor(p_sel)  :  (p_mode==2  ?  peek(state, 139, 0)  :  bit8(((race_mode == 0 && delay_p_bus > 0)  ?  peek(state, 161+floor(p_bus), 0)  :  selector(floor(p_bus)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)),floor(p_bit)));
+pa=((race_mode == 0 && delay_p_a > 0)  ?  peek(state, 161+floor(p_a), 0)  :  selector(floor(p_a)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)); pb=((race_mode == 0 && delay_p_b > 0)  ?  peek(state, 161+floor(p_b), 0)  :  selector(floor(p_b)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)); pac=((race_mode == 0 && delay_p_a > 0)  ?  peek(state, 183+floor(p_a), 0)  :  selector(floor(p_a)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21)); pbc=((race_mode == 0 && delay_p_b > 0)  ?  peek(state, 183+floor(p_b), 0)  :  selector(floor(p_b)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21)); d13=ps>0  ?  pb  :  pa; d14=ps>0  ?  pa  :  pb; c13=ps>0  ?  pbc  :  pac; c14=ps>0  ?  pac  :  pbc;
+mx=((race_mode == 0 && delay_m_src > 0)  ?  peek(state, 161+floor(m_src), 0)  :  selector(floor(m_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21)); d15=0; for(mi=0;mi<8;mi+=1) { mv=band(mx,peek(matrix,mi,0)); mb=m_mode==0  ?  (mv>0)  :  parity8(mv); d15+=mb*pow(2,mi); } c15=((race_mode == 0 && delay_m_src > 0)  ?  peek(state, 183+floor(m_src), 0)  :  selector(floor(m_src)+1, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21));
+changed=(old_d7!=d7 || old_c7!=c7) || (old_d8!=d8 || old_c8!=c8) || (old_d9!=d9 || old_c9!=c9) || (old_d10!=d10 || old_c10!=c10) || (old_d13!=d13 || old_c13!=c13) || (old_d14!=d14 || old_c14!=c14) || (old_d15!=d15 || old_c15!=c15); if (!changed) { break; }
+if (pass==6) {
+rd=bxor(old_d7,d7); rc=old_c7!=c7; race_post=max(race_post,rd>0 || rc); if(race_mode==2 && (rd>0 || rc)) { rng=lcg(rng); d7=bxor(band(d7,255-rd),band(floor(rng/65536),rd)); c7=rc  ?  bit8(floor(rng/65536),0)  :  c7; }
+rd=bxor(old_d8,d8); rc=old_c8!=c8; race_post=max(race_post,rd>0 || rc); if(race_mode==2 && (rd>0 || rc)) { rng=lcg(rng); d8=bxor(band(d8,255-rd),band(floor(rng/65536),rd)); c8=rc  ?  bit8(floor(rng/65536),0)  :  c8; }
+rd=bxor(old_d9,d9); rc=old_c9!=c9; race_post=max(race_post,rd>0 || rc); if(race_mode==2 && (rd>0 || rc)) { rng=lcg(rng); d9=bxor(band(d9,255-rd),band(floor(rng/65536),rd)); c9=rc  ?  bit8(floor(rng/65536),0)  :  c9; }
+rd=bxor(old_d10,d10); rc=old_c10!=c10; race_post=max(race_post,rd>0 || rc); if(race_mode==2 && (rd>0 || rc)) { rng=lcg(rng); d10=bxor(band(d10,255-rd),band(floor(rng/65536),rd)); c10=rc  ?  bit8(floor(rng/65536),0)  :  c10; }
+rd=bxor(old_d13,d13); rc=old_c13!=c13; race_post=max(race_post,rd>0 || rc); if(race_mode==2 && (rd>0 || rc)) { rng=lcg(rng); d13=bxor(band(d13,255-rd),band(floor(rng/65536),rd)); c13=rc  ?  bit8(floor(rng/65536),0)  :  c13; }
+rd=bxor(old_d14,d14); rc=old_c14!=c14; race_post=max(race_post,rd>0 || rc); if(race_mode==2 && (rd>0 || rc)) { rng=lcg(rng); d14=bxor(band(d14,255-rd),band(floor(rng/65536),rd)); c14=rc  ?  bit8(floor(rng/65536),0)  :  c14; }
+rd=bxor(old_d15,d15); rc=old_c15!=c15; race_post=max(race_post,rd>0 || rc); if(race_mode==2 && (rd>0 || rc)) { rng=lcg(rng); d15=bxor(band(d15,255-rd),band(floor(rng/65536),rd)); c15=rc  ?  bit8(floor(rng/65536),0)  :  c15; }
+} }
+poke(state, rng, 143, 0);
+poke(state, d0, 161, 0);poke(state, c0, 183, 0);poke(meters,d0,0,0); poke(meters,c0,1,0);
+poke(state, d1, 162, 0);poke(state, c1, 184, 0);poke(meters,d1,2,0); poke(meters,c1,3,0);
+poke(state, d2, 163, 0);poke(state, c2, 185, 0);poke(meters,d2,4,0); poke(meters,c2,5,0);
+poke(state, d3, 164, 0);poke(state, c3, 186, 0);poke(meters,d3,6,0); poke(meters,c3,7,0);
+poke(state, d4, 165, 0);poke(state, c4, 187, 0);poke(meters,d4,8,0); poke(meters,c4,9,0);
+poke(state, d5, 166, 0);poke(state, c5, 188, 0);poke(meters,d5,10,0); poke(meters,c5,11,0);
+poke(state, d6, 167, 0);poke(state, c6, 189, 0);poke(meters,d6,12,0); poke(meters,c6,13,0);
+poke(state, d7, 168, 0);poke(state, c7, 190, 0);poke(meters,d7,14,0); poke(meters,c7,15,0);
+poke(state, d8, 169, 0);poke(state, c8, 191, 0);poke(meters,d8,16,0); poke(meters,c8,17,0);
+poke(state, d9, 170, 0);poke(state, c9, 192, 0);poke(meters,d9,18,0); poke(meters,c9,19,0);
+poke(state, d10, 171, 0);poke(state, c10, 193, 0);poke(meters,d10,20,0); poke(meters,c10,21,0);
+poke(state, d11, 172, 0);poke(state, c11, 194, 0);poke(meters,d11,22,0); poke(meters,c11,23,0);
+poke(state, d12, 173, 0);poke(state, c12, 195, 0);poke(meters,d12,24,0); poke(meters,c12,25,0);
+poke(state, d13, 174, 0);poke(state, c13, 196, 0);poke(meters,d13,26,0); poke(meters,c13,27,0);
+poke(state, d14, 175, 0);poke(state, c14, 197, 0);poke(meters,d14,28,0); poke(meters,c14,29,0);
+poke(state, d15, 176, 0);poke(state, c15, 198, 0);poke(meters,d15,30,0); poke(meters,c15,31,0);
+poke(state, d16, 177, 0);poke(state, c16, 199, 0);poke(meters,d16,32,0); poke(meters,c16,33,0);
+poke(state, d17, 178, 0);poke(state, c17, 200, 0);poke(meters,d17,34,0); poke(meters,c17,35,0);
+poke(state, d18, 179, 0);poke(state, c18, 201, 0);poke(meters,d18,36,0); poke(meters,c18,37,0);
+poke(state, d19, 180, 0);poke(state, c19, 202, 0);poke(meters,d19,38,0); poke(meters,c19,39,0);
+poke(state, d20, 181, 0);poke(state, c20, 203, 0);poke(meters,d20,40,0); poke(meters,c20,41,0);
+poke(state, d21, 182, 0);poke(state, c21, 204, 0);poke(meters,d21,42,0); poke(meters,c21,43,0);
+dav=selector(floor(da_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21); darng=floor(da_seed);
+darng=lcg(darng); dawt0=pow(2,0)*(da_wmode==0  ?  1  :  (da_wmode==1  ?  1+da_tol*0.01*(darng/8388607.5-1)  :  da_w0));
+darng=lcg(darng); dawt1=pow(2,1)*(da_wmode==0  ?  1  :  (da_wmode==1  ?  1+da_tol*0.01*(darng/8388607.5-1)  :  da_w1));
+darng=lcg(darng); dawt2=pow(2,2)*(da_wmode==0  ?  1  :  (da_wmode==1  ?  1+da_tol*0.01*(darng/8388607.5-1)  :  da_w2));
+darng=lcg(darng); dawt3=pow(2,3)*(da_wmode==0  ?  1  :  (da_wmode==1  ?  1+da_tol*0.01*(darng/8388607.5-1)  :  da_w3));
+darng=lcg(darng); dawt4=pow(2,4)*(da_wmode==0  ?  1  :  (da_wmode==1  ?  1+da_tol*0.01*(darng/8388607.5-1)  :  da_w4));
+darng=lcg(darng); dawt5=pow(2,5)*(da_wmode==0  ?  1  :  (da_wmode==1  ?  1+da_tol*0.01*(darng/8388607.5-1)  :  da_w5));
+darng=lcg(darng); dawt6=pow(2,6)*(da_wmode==0  ?  1  :  (da_wmode==1  ?  1+da_tol*0.01*(darng/8388607.5-1)  :  da_w6));
+darng=lcg(darng); dawt7=pow(2,7)*(da_wmode==0  ?  1  :  (da_wmode==1  ?  1+da_tol*0.01*(darng/8388607.5-1)  :  da_w7));
+dasum=bit8(dav,0)*dawt0+bit8(dav,1)*dawt1+bit8(dav,2)*dawt2+bit8(dav,3)*dawt3+bit8(dav,4)*dawt4+bit8(dav,5)*dawt5+bit8(dav,6)*dawt6+bit8(dav,7)*dawt7; daden=abs(dawt0)+abs(dawt1)+abs(dawt2)+abs(dawt3)+abs(dawt4)+abs(dawt5)+abs(dawt6)+abs(dawt7);
+daunit=daden>0  ?  dasum/daden  :  0; daraw=(da_range==0  ?  daunit*2-1  :  daunit)*(da_gain<=-80  ?  0  :  pow(10,da_gain/20)); dacoef=1-exp(-twopi*min(da_cutoff,samplerate*0.49)/samplerate);
+dalp0=peek(state, 205, 0)+dacoef*(daraw- peek(state, 205, 0)); poke(state, dalp0, 205, 0);
+dalp1=peek(state, 206, 0)+dacoef*(dalp0- peek(state, 206, 0)); poke(state, dalp1, 206, 0);
+dalp2=peek(state, 207, 0)+dacoef*(dalp1- peek(state, 207, 0)); poke(state, dalp2, 207, 0);
+dalp3=peek(state, 208, 0)+dacoef*(dalp2- peek(state, 208, 0)); poke(state, dalp3, 208, 0);
+dafiltered=selector(floor(da_filt)+1,daraw,dalp0,dalp3); dablocked=dafiltered- peek(state, 209, 0)+0.995*peek(state, 210, 0); poke(state, dafiltered, 209, 0);poke(state, dablocked, 210, 0); day=da_dc>0  ?  dablocked  :  dafiltered;
+dbv=selector(floor(db_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21); dbrng=floor(db_seed);
+dbrng=lcg(dbrng); dbwt0=pow(2,0)*(db_wmode==0  ?  1  :  (db_wmode==1  ?  1+db_tol*0.01*(dbrng/8388607.5-1)  :  db_w0));
+dbrng=lcg(dbrng); dbwt1=pow(2,1)*(db_wmode==0  ?  1  :  (db_wmode==1  ?  1+db_tol*0.01*(dbrng/8388607.5-1)  :  db_w1));
+dbrng=lcg(dbrng); dbwt2=pow(2,2)*(db_wmode==0  ?  1  :  (db_wmode==1  ?  1+db_tol*0.01*(dbrng/8388607.5-1)  :  db_w2));
+dbrng=lcg(dbrng); dbwt3=pow(2,3)*(db_wmode==0  ?  1  :  (db_wmode==1  ?  1+db_tol*0.01*(dbrng/8388607.5-1)  :  db_w3));
+dbrng=lcg(dbrng); dbwt4=pow(2,4)*(db_wmode==0  ?  1  :  (db_wmode==1  ?  1+db_tol*0.01*(dbrng/8388607.5-1)  :  db_w4));
+dbrng=lcg(dbrng); dbwt5=pow(2,5)*(db_wmode==0  ?  1  :  (db_wmode==1  ?  1+db_tol*0.01*(dbrng/8388607.5-1)  :  db_w5));
+dbrng=lcg(dbrng); dbwt6=pow(2,6)*(db_wmode==0  ?  1  :  (db_wmode==1  ?  1+db_tol*0.01*(dbrng/8388607.5-1)  :  db_w6));
+dbrng=lcg(dbrng); dbwt7=pow(2,7)*(db_wmode==0  ?  1  :  (db_wmode==1  ?  1+db_tol*0.01*(dbrng/8388607.5-1)  :  db_w7));
+dbsum=bit8(dbv,0)*dbwt0+bit8(dbv,1)*dbwt1+bit8(dbv,2)*dbwt2+bit8(dbv,3)*dbwt3+bit8(dbv,4)*dbwt4+bit8(dbv,5)*dbwt5+bit8(dbv,6)*dbwt6+bit8(dbv,7)*dbwt7; dbden=abs(dbwt0)+abs(dbwt1)+abs(dbwt2)+abs(dbwt3)+abs(dbwt4)+abs(dbwt5)+abs(dbwt6)+abs(dbwt7);
+dbunit=dbden>0  ?  dbsum/dbden  :  0; dbraw=(db_range==0  ?  dbunit*2-1  :  dbunit)*(db_gain<=-80  ?  0  :  pow(10,db_gain/20)); dbcoef=1-exp(-twopi*min(db_cutoff,samplerate*0.49)/samplerate);
+dblp0=peek(state, 211, 0)+dbcoef*(dbraw- peek(state, 211, 0)); poke(state, dblp0, 211, 0);
+dblp1=peek(state, 212, 0)+dbcoef*(dblp0- peek(state, 212, 0)); poke(state, dblp1, 212, 0);
+dblp2=peek(state, 213, 0)+dbcoef*(dblp1- peek(state, 213, 0)); poke(state, dblp2, 213, 0);
+dblp3=peek(state, 214, 0)+dbcoef*(dblp2- peek(state, 214, 0)); poke(state, dblp3, 214, 0);
+dbfiltered=selector(floor(db_filt)+1,dbraw,dblp0,dblp3); dbblocked=dbfiltered- peek(state, 215, 0)+0.995*peek(state, 216, 0); poke(state, dbfiltered, 215, 0);poke(state, dbblocked, 216, 0); dby=db_dc>0  ?  dbblocked  :  dbfiltered;
+poke(state, day, 218, 0);poke(state, dby, 219, 0);
+out1=ready*((da_dest!=1  ?  day  :  0)+(db_dest!=1  ?  dby  :  0)); out2=ready*((da_dest!=0  ?  day  :  0)+(db_dest!=0  ?  dby  :  0));
+t1d=selector(floor(t1_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21); t1v=selector(floor(t1_kind)+1,t1d/255,bit8(t1d,floor(t1_bit)),band(t1d,floor(t1_mask))>0); out3=clamp(t1_min+(t1_max-t1_min)*t1v*t1_depth,0,1);
+t2d=selector(floor(t2_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21); t2v=selector(floor(t2_kind)+1,t2d/255,bit8(t2d,floor(t2_bit)),band(t2d,floor(t2_mask))>0); out4=clamp(t2_min+(t2_max-t2_min)*t2v*t2_depth,0,1);
+t3d=selector(floor(t3_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21); t3v=selector(floor(t3_kind)+1,t3d/255,bit8(t3d,floor(t3_bit)),band(t3d,floor(t3_mask))>0); out5=clamp(t3_min+(t3_max-t3_min)*t3v*t3_depth,0,1);
+t4d=selector(floor(t4_src)+1, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19, d20, d21); t4v=selector(floor(t4_kind)+1,t4d/255,bit8(t4d,floor(t4_bit)),band(t4d,floor(t4_mask))>0); out6=clamp(t4_min+(t4_max-t4_min)*t4v*t4_depth,0,1);
+poke(meters,max(race_pre,race_post),44,0); poke(meters,(ber_mode==0)&&(bf*256>samplerate/2),45,0); poke(meters,samplerate,46,0);
+// Publish a double-bank snapshot once per vector. Reader validates sequence.
+count=peek(exchange,1,0);
+if(count<=0 || snap_request!= peek(exchange,2,0)) {
+ seq=mod(peek(exchange,3,0)+1,16777216); bank=mod(seq,2); base=2048+bank*320;
+ for(i=0;i<320;i+=1) { poke(exchange,peek(state,i,0),base+i,0); }
+ poke(exchange,seq,3,0); poke(exchange,snap_request,2,0); count=max(vector_size,1);
+}
+poke(exchange,count-1,1,0);
+

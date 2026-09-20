@@ -1,0 +1,67 @@
+[
+  {},
+  {
+    "pm_c1": 0.18,
+    "pm_c2": 0.12,
+    "mult_l": 2,
+    "mult_r": 3,
+    "lpg_decay": 1600,
+    "index_env": 0.65
+  },
+  {
+    "pm_c1": 0.13,
+    "pm_c2": 0.08,
+    "type_l": 0,
+    "tune_l": -12,
+    "mult_r": 2,
+    "output_mode": 1,
+    "lpg_open": 0.8,
+    "lpg_material": 2,
+    "lpg_decay": 3000
+  },
+  {
+    "level_c": 0,
+    "level_l": 1,
+    "level_r": 1,
+    "mult_l": 5,
+    "mult_r": 7,
+    "fm_l": 0.26,
+    "fm_r": 0.26,
+    "lpg_decay": 2400,
+    "index_env": 0.65,
+    "transpose": -12
+  },
+  {
+    "pm_l": 0.14,
+    "pm_r": 0.18,
+    "pm_c1": 0.28,
+    "pm_c2": 0.19,
+    "mult_l": 3,
+    "div_l": 2,
+    "mult_r": 5,
+    "div_r": 3,
+    "lpg_decay": 500,
+    "lpg_ctrl": -0.12,
+    "index_env": 0.8
+  },
+  {
+    "level_l": 0.8,
+    "level_r": 0.8,
+    "mult_l": 5,
+    "div_l": 4,
+    "mult_r": 3,
+    "div_r": 2,
+    "lpg_decay": 4000,
+    "lpg_material": 2,
+    "lpg_open": 0.15
+  },
+  {
+    "pm_c1": 0.32,
+    "pm_c2": 0.2,
+    "ratio_source": 1,
+    "ratio_depth_l": 3,
+    "ratio_depth_r": 5,
+    "lfo_hz": 0.35,
+    "lpg_open": 1
+  }
+]

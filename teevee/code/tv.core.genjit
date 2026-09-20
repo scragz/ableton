@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!DOCTYPE genjit SYSTEM "file:genjit.dtd">
+<genjit>
+	<title>tv.core</title>
+	<description>GPU processing: Scroll, Warp, Smear, Edge effects</description>
+	<inlets>
+		<inlet id="0" name="in1" type="texture" comment="Feedback texture" />
+	</inlets>
+	<outlets>
+		<outlet id="0" name="out1" type="texture" />
+	</outlets>
+	<params>
+		<param id="0" name="scroll_speed" type="float" default="0.01" min="0" max="1" />
+		<param id="1" name="zoom" type="float" default="1" min="0.25" max="4" />
+		<param id="2" name="rotation" type="float" default="0" min="-3.14159" max="3.14159" />
+		<param id="3" name="smear" type="float" default="0" min="0" max="1" />
+		<param id="4" name="edge_amount" type="float" default="0" min="0" max="1" />
+		<param id="5" name="warp_x" type="float" default="0" min="-1" max="1" />
+		<param id="6" name="warp_y" type="float" default="0" min="-1" max="1" />
+		<param id="7" name="scrub" type="float" default="0" min="-1" max="1" />
+		<param id="8" name="mosaic" type="float" default="2048" min="10" max="2048" />
+		<param id="9" name="aberration" type="float" default="0" min="0" max="0.05" />
+		<param id="10" name="bloom" type="float" default="0" min="0" max="1" />
+		<param id="11" name="solarize" type="float" default="1" min="0" max="1" />
+		<param id="12" name="crush" type="float" default="255" min="2" max="255" />
+		<param id="13" name="shutter" type="float" default="0" min="0" max="1" />
+		<param id="14" name="ghosting" type="float" default="0" min="0" max="0.5" />
+	</params>
+	<code><![CDATA[
+// History buffers for feedback and ghosting
+History feedback_frame(0);
+History ghost_frame_1(0);
+History ghost_frame_2(0);
+
+// Get normalized coordinates
+uv = norm;
+center = vec(0.5, 0.5);
+
+// === EFFECT 1: MOSAIC - UV Quantization ===
+// Scale: 2048 (no effect) → 10 (heavy pixelation)
+mosaic_uv = floor(uv * mosaic) / mosaic;
+
+// Sample input texture at quantized position (the audio-encoded data)
+input_color = sample(in1, mosaic_uv);
+
+// === GEOMETRY TRANSFORMS (existing code) ===
+// Center the UVs for rotation/zoom (for feedback sampling)
+uv_centered = uv - center;
+
+// Apply rotation
+cos_r = cos(rotation);
+sin_r = sin(rotation);
+uv_rotated = vec(
+    uv_centered.x * cos_r - uv_centered.y * sin_r,
+    uv_centered.x * sin_r + uv_centered.y * cos_r
+);
+
+// Apply zoom
+uv_zoomed = uv_rotated / zoom;
+
+// Apply warp (barrel/pincushion distortion)
+dist = length(uv_zoomed);
+warp_factor = 1.0 + dist * dist * (warp_x + warp_y * dist);
+uv_warped = uv_zoomed * warp_factor;
+
+// Un-center and apply scroll
+uv_feedback = uv_warped + center;
+uv_feedback.y = uv_feedback.y - scroll_speed;
+
+// Apply scrub (horizontal tracking error displacement)
+uv_feedback.x = uv_feedback.x + scrub;
+
+// Wrap coordinates for feedback sampling
+uv_feedback = wrap(uv_feedback, 0, 1);
+
+// Sample the feedback (previous frame with transforms applied)
+feedback_color = sample(feedback_frame, uv_feedback);
+
+// Edge detection on feedback (Sobel-like)
+texel = 1.0 / dim;
+left = sample(feedback_frame, uv_feedback + vec(-texel.x, 0));
+right = sample(feedback_frame, uv_feedback + vec(texel.x, 0));
+up = sample(feedback_frame, uv_feedback + vec(0, -texel.y));
+down = sample(feedback_frame, uv_feedback + vec(0, texel.y));
+
+edge_h = abs(left - right);
+edge_v = abs(up - down);
+edge = (edge_h + edge_v) * 0.5;
+
+// Mix edge detection into feedback
+feedback_with_edge = mix(feedback_color, feedback_color + edge, edge_amount);
+
+// Blend input with processed feedback (smear controls feedback amount)
+// At smear=0: pure input, at smear=1: pure feedback
+base_output = mix(input_color, feedback_with_edge, smear);
+
+// Safety clamp to prevent runaway feedback
+base_output = clamp(base_output, -2, 2);
+
+// === EFFECT 2: ABERRATION - RGB Channel Offset ===
+// Scale: 0 (no effect) → 0.05 (maximum offset)
+// Radial falloff from center
+offset_dist = length(uv - center);
+radial_scale = offset_dist * aberration;
+
+r_sample = sample(feedback_frame, wrap(uv_feedback + vec(radial_scale, 0), 0, 1));
+g_sample = sample(feedback_frame, uv_feedback);
+b_sample = sample(feedback_frame, wrap(uv_feedback - vec(radial_scale, 0), 0, 1));
+
+aberrated_feedback = vec(r_sample.r, g_sample.g, b_sample.b, base_output.a);
+base_output = mix(base_output, aberrated_feedback, clamp(aberration * 20, 0, 1));
+
+// === EFFECT 3: BLOOM - 4-tap Gaussian Blur + Thresholding ===
+// Scale: 0 (no effect) → 1 (maximum bloom)
+if (bloom > 0.001) {
+    blur_size = bloom * 0.01;
+
+    // 4-tap blur kernel
+    blur_tap1 = sample(feedback_frame, wrap(uv_feedback + vec(blur_size, blur_size), 0, 1));
+    blur_tap2 = sample(feedback_frame, wrap(uv_feedback + vec(-blur_size, blur_size), 0, 1));
+    blur_tap3 = sample(feedback_frame, wrap(uv_feedback + vec(blur_size, -blur_size), 0, 1));
+    blur_tap4 = sample(feedback_frame, wrap(uv_feedback + vec(-blur_size, -blur_size), 0, 1));
+
+    blurred = (blur_tap1 + blur_tap2 + blur_tap3 + blur_tap4) * 0.25;
+
+    // Threshold bright areas
+    brightness = (blurred.r + blurred.g + blurred.b) / 3.0;
+    threshold = 0.5;
+    bloom_mask = clamp((brightness - threshold) / (1.0 - threshold), 0, 1);
+
+    bloom_color = blurred * bloom_mask;
+    base_output = base_output + bloom_color * bloom;
+}
+
+// === EFFECT 4: SOLARIZE - Threshold Inversion ===
+// Scale: 0 (full inversion) → 1 (no effect)
+solarized = abs(base_output - solarize);
+base_output = mix(solarized, base_output, solarize);
+
+// === EFFECT 5: CRUSH - Color Quantization with Dithering ===
+// Scale: 2 (extreme posterization) → 255 (no effect)
+if (crush < 254) {
+    // Simple ordered dithering
+    dither_pattern = fract(uv.x * 123.456 + uv.y * 789.123);
+    dither_amount = (1.0 / crush) * 0.5;
+
+    crushed = floor(base_output * crush + dither_pattern * dither_amount) / crush;
+    base_output = crushed;
+}
+
+// === EFFECT 6: SHUTTER - Temporal LFO Masking ===
+// Scale: 0 (no effect) → 1 (maximum shuttering at 20Hz)
+// Using phase accumulator for temporal control
+phase_accum = time * shutter * 20.0;
+shutter_wave = fract(phase_accum);
+shutter_mask = step(0.5, shutter_wave);
+
+// Black out during low phase
+base_output = base_output * mix(1.0, shutter_mask, shutter);
+
+// === EFFECT 7: GHOSTING - Frame Buffer Mixing ===
+// Scale: 0 (no effect) → 0.5 (maximum ghosting)
+ghost_1 = sample(ghost_frame_1, uv);
+ghost_2 = sample(ghost_frame_2, uv);
+
+ghosted_output = mix(base_output, (ghost_1 * 0.6 + ghost_2 * 0.4), ghosting);
+
+// Update ghost buffers (frame delay chain)
+ghost_frame_2 = ghost_frame_1;
+ghost_frame_1 = feedback_frame;
+
+// Store output for next frame's feedback (with safety damping)
+feedback_frame = clamp(ghosted_output * 0.99, -2, 2);
+
+// Output final result (clamped to prevent overflow)
+out1 = clamp(ghosted_output, -1, 1);
+]]></code>
+</genjit>

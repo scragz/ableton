@@ -1,0 +1,494 @@
+{
+  "scope": "Native Gen and controller recordings from Ableton Live; not an original-ROM fidelity comparison.",
+  "passed": 69,
+  "failed": [],
+  "recordings": {
+    "mode-01": {
+      "seconds": 1.801,
+      "sample_rate": 44100,
+      "peak": 0.15617125,
+      "rms": 0.02304286,
+      "stereo_difference_rms": 0.01214852
+    },
+    "mode-02": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.15717877,
+      "rms": 0.02263837,
+      "stereo_difference_rms": 0.01187564
+    },
+    "mode-03": {
+      "seconds": 1.801,
+      "sample_rate": 44100,
+      "peak": 0.15716048,
+      "rms": 0.02244167,
+      "stereo_difference_rms": 0.01154647
+    },
+    "mode-04": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.15466939,
+      "rms": 0.01970997,
+      "stereo_difference_rms": 0.01046389
+    },
+    "mode-05": {
+      "seconds": 1.801,
+      "sample_rate": 44100,
+      "peak": 0.03488271,
+      "rms": 0.00659197,
+      "stereo_difference_rms": 0.00357552
+    },
+    "mode-06": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.03468196,
+      "rms": 0.00664176,
+      "stereo_difference_rms": 0.00365291
+    },
+    "mode-07": {
+      "seconds": 1.8,
+      "sample_rate": 44100,
+      "peak": 0.15379646,
+      "rms": 0.02319964,
+      "stereo_difference_rms": 0.01200102
+    },
+    "mode-08": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.155771,
+      "rms": 0.01708593,
+      "stereo_difference_rms": 0.00908671
+    },
+    "mode-09": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.15274453,
+      "rms": 0.01604502,
+      "stereo_difference_rms": 0.0083681
+    },
+    "mode-10": {
+      "seconds": 1.808,
+      "sample_rate": 44100,
+      "peak": 0.0330862,
+      "rms": 0.00290421,
+      "stereo_difference_rms": 0.00157093
+    },
+    "mode-11": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.03352467,
+      "rms": 0.00356165,
+      "stereo_difference_rms": 0.00194954
+    },
+    "mode-12": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.03983972,
+      "rms": 0.0075737,
+      "stereo_difference_rms": 0.00410646
+    },
+    "mode-13": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.02883849,
+      "rms": 0.00548229,
+      "stereo_difference_rms": 0.0029762
+    },
+    "mode-14": {
+      "seconds": 1.805,
+      "sample_rate": 44100,
+      "peak": 0.1565731,
+      "rms": 0.01821038,
+      "stereo_difference_rms": 0.00939429
+    },
+    "mode-15": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.03537001,
+      "rms": 0.00802146,
+      "stereo_difference_rms": 0.00433117
+    },
+    "mode-16": {
+      "seconds": 1.801,
+      "sample_rate": 44100,
+      "peak": 0.02558302,
+      "rms": 0.00579571,
+      "stereo_difference_rms": 0.00313434
+    },
+    "mode-17": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.15186419,
+      "rms": 0.02294222,
+      "stereo_difference_rms": 0.01197284
+    },
+    "mode-18": {
+      "seconds": 1.801,
+      "sample_rate": 44100,
+      "peak": 0.06976512,
+      "rms": 0.00694748,
+      "stereo_difference_rms": 0.00411417
+    },
+    "mode-19": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.15662058,
+      "rms": 0.01627894,
+      "stereo_difference_rms": 0.00847937
+    },
+    "mode-20": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.03501232,
+      "rms": 0.007973,
+      "stereo_difference_rms": 0.00430492
+    },
+    "mode-21": {
+      "seconds": 1.805,
+      "sample_rate": 44100,
+      "peak": 0.02528407,
+      "rms": 0.005749,
+      "stereo_difference_rms": 0.00311082
+    },
+    "mode-22": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.01441906,
+      "rms": 0.00464678,
+      "stereo_difference_rms": 0.00255824
+    },
+    "mode-23": {
+      "seconds": 1.805,
+      "sample_rate": 44100,
+      "peak": 0.01284434,
+      "rms": 0.00434151,
+      "stereo_difference_rms": 0.00293748
+    },
+    "mode-24": {
+      "seconds": 1.805,
+      "sample_rate": 44100,
+      "peak": 0.12307586,
+      "rms": 0.01455455,
+      "stereo_difference_rms": 0.00900547
+    },
+    "mode-25": {
+      "seconds": 1.801,
+      "sample_rate": 44100,
+      "peak": 0.05985091,
+      "rms": 0.00749749,
+      "stereo_difference_rms": 0.00438989
+    },
+    "mode-26": {
+      "seconds": 1.801,
+      "sample_rate": 44100,
+      "peak": 0.06203317,
+      "rms": 0.0077634,
+      "stereo_difference_rms": 0.00452897
+    },
+    "mode-27": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.05439387,
+      "rms": 0.00754235,
+      "stereo_difference_rms": 0.00448825
+    },
+    "mode-28": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.09367782,
+      "rms": 0.01074966,
+      "stereo_difference_rms": 0.00660741
+    },
+    "mode-29": {
+      "seconds": 1.8,
+      "sample_rate": 44100,
+      "peak": 0.02731739,
+      "rms": 0.00747078,
+      "stereo_difference_rms": 0.00417107
+    },
+    "mode-30": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.0612849,
+      "rms": 0.00964259,
+      "stereo_difference_rms": 0.00587015
+    },
+    "mode-31": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.04412032,
+      "rms": 0.00873528,
+      "stereo_difference_rms": 0.00565998
+    },
+    "mode-32": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.04537684,
+      "rms": 0.00839207,
+      "stereo_difference_rms": 0.0052998
+    },
+    "mode-33": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.11140123,
+      "rms": 0.01355287,
+      "stereo_difference_rms": 0.00782216
+    },
+    "mode-34": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.10492329,
+      "rms": 0.01306739,
+      "stereo_difference_rms": 0.00739189
+    },
+    "mode-35": {
+      "seconds": 1.805,
+      "sample_rate": 44100,
+      "peak": 0.0866337,
+      "rms": 0.0141356,
+      "stereo_difference_rms": 0.0080994
+    },
+    "mode-36": {
+      "seconds": 1.8,
+      "sample_rate": 44100,
+      "peak": 0.04460616,
+      "rms": 0.00704368,
+      "stereo_difference_rms": 0.00476158
+    },
+    "mode-37": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.17097089,
+      "rms": 0.05522383,
+      "stereo_difference_rms": 0.03007735
+    },
+    "mode-38": {
+      "seconds": 1.801,
+      "sample_rate": 44100,
+      "peak": 0.17145228,
+      "rms": 0.05464543,
+      "stereo_difference_rms": 0.02983988
+    },
+    "mode-39": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.17102322,
+      "rms": 0.04929437,
+      "stereo_difference_rms": 0.02675917
+    },
+    "mode-40": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.17196703,
+      "rms": 0.05499058,
+      "stereo_difference_rms": 0.02987831
+    },
+    "mode-41": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.17101561,
+      "rms": 0.06106957,
+      "stereo_difference_rms": 0.0320928
+    },
+    "mode-42": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.17229043,
+      "rms": 0.06940934,
+      "stereo_difference_rms": 0.03702557
+    },
+    "mode-43": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.1729138,
+      "rms": 0.06144295,
+      "stereo_difference_rms": 0.03298743
+    },
+    "mode-44": {
+      "seconds": 1.801,
+      "sample_rate": 44100,
+      "peak": 0.17081903,
+      "rms": 0.05461758,
+      "stereo_difference_rms": 0.02974216
+    },
+    "mode-45": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.16866805,
+      "rms": 0.08626445,
+      "stereo_difference_rms": 0.03960909
+    },
+    "mode-46": {
+      "seconds": 1.808,
+      "sample_rate": 44100,
+      "peak": 0.17159663,
+      "rms": 0.05838943,
+      "stereo_difference_rms": 0.03052375
+    },
+    "mode-47": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.12008338,
+      "rms": 0.04295002,
+      "stereo_difference_rms": 0.02677279
+    },
+    "mode-48": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.11152169,
+      "rms": 0.04271461,
+      "stereo_difference_rms": 0.02735616
+    },
+    "mode-49": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.13260452,
+      "rms": 0.03528841,
+      "stereo_difference_rms": 0.02017257
+    },
+    "mode-50": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.0381708,
+      "rms": 0.00393577,
+      "stereo_difference_rms": 0.00211641
+    },
+    "mode-51": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.02677033,
+      "rms": 0.00296742,
+      "stereo_difference_rms": 0.00204053
+    },
+    "mode-52": {
+      "seconds": 1.805,
+      "sample_rate": 44100,
+      "peak": 0.00641648,
+      "rms": 0.00217427,
+      "stereo_difference_rms": 0.00119376
+    },
+    "mode-53": {
+      "seconds": 1.805,
+      "sample_rate": 44100,
+      "peak": 0.03616176,
+      "rms": 0.00413647,
+      "stereo_difference_rms": 0.00229081
+    },
+    "mode-54": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.03409623,
+      "rms": 0.0061577,
+      "stereo_difference_rms": 0.0037182
+    },
+    "mode-55": {
+      "seconds": 1.801,
+      "sample_rate": 44100,
+      "peak": 0.02855573,
+      "rms": 0.00785468,
+      "stereo_difference_rms": 0.00435682
+    },
+    "mode-56": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.02684213,
+      "rms": 0.0074043,
+      "stereo_difference_rms": 0.00496405
+    },
+    "mode-57": {
+      "seconds": 1.801,
+      "sample_rate": 44100,
+      "peak": 0.04453347,
+      "rms": 0.00577029,
+      "stereo_difference_rms": 0.00350263
+    },
+    "mode-58": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.03910772,
+      "rms": 0.00663318,
+      "stereo_difference_rms": 0.00397631
+    },
+    "mode-59": {
+      "seconds": 1.805,
+      "sample_rate": 44100,
+      "peak": 0.0332571,
+      "rms": 0.00495305,
+      "stereo_difference_rms": 0.00325282
+    },
+    "mode-60": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.00775642,
+      "rms": 0.00243574,
+      "stereo_difference_rms": 0.00173219
+    },
+    "mode-61": {
+      "seconds": 1.802,
+      "sample_rate": 44100,
+      "peak": 0.02970942,
+      "rms": 0.00402581,
+      "stereo_difference_rms": 0.00212731
+    },
+    "mode-62": {
+      "seconds": 1.805,
+      "sample_rate": 44100,
+      "peak": 0.03178027,
+      "rms": 0.00407873,
+      "stereo_difference_rms": 0.00222023
+    },
+    "mode-63": {
+      "seconds": 1.805,
+      "sample_rate": 44100,
+      "peak": 0.02394331,
+      "rms": 0.00284584,
+      "stereo_difference_rms": 0.0018872
+    },
+    "mode-64": {
+      "seconds": 1.801,
+      "sample_rate": 44100,
+      "peak": 0.02785027,
+      "rms": 0.00290192,
+      "stereo_difference_rms": 0.00160784
+    },
+    "midi": {
+      "seconds": 4.003,
+      "sample_rate": 44100,
+      "peak": 0.0248396,
+      "rms": 0.00492548,
+      "stereo_difference_rms": 0.00273752,
+      "before_note_rms": 5.809979625033102e-20,
+      "held_note_rms": 0.0073407526218656595,
+      "after_note_off_rms": 5.3952803061409044e-40
+    },
+    "restore": {
+      "seconds": 4.003,
+      "sample_rate": 44100,
+      "peak": 0.15507735,
+      "rms": 0.01859231,
+      "stereo_difference_rms": 0.0096034
+    },
+    "freeze": {
+      "seconds": 4.003,
+      "sample_rate": 44100,
+      "peak": 0.02494482,
+      "rms": 0.00663987,
+      "stereo_difference_rms": 0.00368483
+    },
+    "extreme": {
+      "seconds": 5.001,
+      "sample_rate": 44100,
+      "peak": 0.17033675,
+      "rms": 0.03433308,
+      "stereo_difference_rms": 0.01628843
+    },
+    "silence": {
+      "seconds": 2.003,
+      "sample_rate": 44100,
+      "peak": 0.00051632,
+      "rms": 1.879e-05,
+      "stereo_difference_rms": 5.05e-06,
+      "settled_peak": 1.6086328610467764e-17
+    }
+  }
+}

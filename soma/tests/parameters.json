@@ -1,0 +1,634 @@
+{
+  "type_l": {
+    "label": "L Type",
+    "lo": 0,
+    "hi": 1,
+    "default": 1,
+    "kind": "enum",
+    "items": [
+      "Hi",
+      "Ratio"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "mult_l": {
+    "label": "L Multiply",
+    "lo": 1,
+    "hi": 32,
+    "default": 1,
+    "kind": "int",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "div_l": {
+    "label": "L Divide",
+    "lo": 1,
+    "hi": 32,
+    "default": 1,
+    "kind": "int",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "tune_l": {
+    "label": "L Tune",
+    "lo": -48,
+    "hi": 48,
+    "default": 0,
+    "kind": "int",
+    "items": null,
+    "unit": "st",
+    "exp": 1
+  },
+  "fine_l": {
+    "label": "L Fine",
+    "lo": -100,
+    "hi": 100,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": "ct",
+    "exp": 1
+  },
+  "fm_mode_l": {
+    "label": "L FM Mode",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "enum",
+    "items": [
+      "Lin",
+      "Exp/PM"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "fm_l": {
+    "label": "L FM",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "level_l": {
+    "label": "L Mix",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "pm_l": {
+    "label": "L Phase",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "ratio_target_l": {
+    "label": "L Ratio Target",
+    "lo": 0,
+    "hi": 1,
+    "default": 1,
+    "kind": "enum",
+    "items": [
+      "Divide",
+      "Multiply"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "ratio_depth_l": {
+    "label": "L Ratio Steps",
+    "lo": -16,
+    "hi": 16,
+    "default": 0,
+    "kind": "int",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "tune_c": {
+    "label": "C Tune",
+    "lo": -48,
+    "hi": 48,
+    "default": 0,
+    "kind": "int",
+    "items": null,
+    "unit": "st",
+    "exp": 1
+  },
+  "fine_c": {
+    "label": "C Fine",
+    "lo": -100,
+    "hi": 100,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": "ct",
+    "exp": 1
+  },
+  "fm_mode_c": {
+    "label": "C FM Mode",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "enum",
+    "items": [
+      "Lin",
+      "Exp"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "fm_c": {
+    "label": "C FM",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "level_c": {
+    "label": "C Mix",
+    "lo": 0,
+    "hi": 1,
+    "default": 1,
+    "kind": "float",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "type_r": {
+    "label": "R Type",
+    "lo": 0,
+    "hi": 1,
+    "default": 1,
+    "kind": "enum",
+    "items": [
+      "Hi",
+      "Ratio"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "mult_r": {
+    "label": "R Multiply",
+    "lo": 1,
+    "hi": 32,
+    "default": 1,
+    "kind": "int",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "div_r": {
+    "label": "R Divide",
+    "lo": 1,
+    "hi": 32,
+    "default": 1,
+    "kind": "int",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "tune_r": {
+    "label": "R Tune",
+    "lo": -48,
+    "hi": 48,
+    "default": 0,
+    "kind": "int",
+    "items": null,
+    "unit": "st",
+    "exp": 1
+  },
+  "fine_r": {
+    "label": "R Fine",
+    "lo": -100,
+    "hi": 100,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": "ct",
+    "exp": 1
+  },
+  "fm_mode_r": {
+    "label": "R FM Mode",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "enum",
+    "items": [
+      "Lin",
+      "Exp/PM"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "fm_r": {
+    "label": "R FM",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "level_r": {
+    "label": "R Mix",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "pm_r": {
+    "label": "R Phase",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "ratio_target_r": {
+    "label": "R Ratio Target",
+    "lo": 0,
+    "hi": 1,
+    "default": 1,
+    "kind": "enum",
+    "items": [
+      "Divide",
+      "Multiply"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "ratio_depth_r": {
+    "label": "R Ratio Steps",
+    "lo": -16,
+    "hi": 16,
+    "default": 0,
+    "kind": "int",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "pm_c1": {
+    "label": "C Phase 1",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "pm_c2": {
+    "label": "C Phase 2",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "transpose": {
+    "label": "Transpose",
+    "lo": -24,
+    "hi": 24,
+    "default": 0,
+    "kind": "int",
+    "items": null,
+    "unit": "st",
+    "exp": 1
+  },
+  "src_fm_l": {
+    "label": "FM L Source",
+    "lo": 0,
+    "hi": 6,
+    "default": 2,
+    "kind": "enum",
+    "items": [
+      "Off",
+      "L Sine",
+      "C Sine",
+      "C Cos",
+      "R Sine",
+      "LFO",
+      "Gate Env"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "src_fm_c": {
+    "label": "FM C Source",
+    "lo": 0,
+    "hi": 6,
+    "default": 0,
+    "kind": "enum",
+    "items": [
+      "Off",
+      "L Sine",
+      "C Sine",
+      "C Cos",
+      "R Sine",
+      "LFO",
+      "Gate Env"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "src_fm_r": {
+    "label": "FM R Source",
+    "lo": 0,
+    "hi": 6,
+    "default": 3,
+    "kind": "enum",
+    "items": [
+      "Off",
+      "L Sine",
+      "C Sine",
+      "C Cos",
+      "R Sine",
+      "LFO",
+      "Gate Env"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "src_pm_l": {
+    "label": "PM L Source",
+    "lo": 0,
+    "hi": 6,
+    "default": 4,
+    "kind": "enum",
+    "items": [
+      "Off",
+      "L Sine",
+      "C Sine",
+      "C Cos",
+      "R Sine",
+      "LFO",
+      "Gate Env"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "src_pm_r": {
+    "label": "PM R Source",
+    "lo": 0,
+    "hi": 6,
+    "default": 1,
+    "kind": "enum",
+    "items": [
+      "Off",
+      "L Sine",
+      "C Sine",
+      "C Cos",
+      "R Sine",
+      "LFO",
+      "Gate Env"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "src_pm_c1": {
+    "label": "PM C1 Source",
+    "lo": 0,
+    "hi": 6,
+    "default": 1,
+    "kind": "enum",
+    "items": [
+      "Off",
+      "L Sine",
+      "C Sine",
+      "C Cos",
+      "R Sine",
+      "LFO",
+      "Gate Env"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "src_pm_c2": {
+    "label": "PM C2 Source",
+    "lo": 0,
+    "hi": 6,
+    "default": 4,
+    "kind": "enum",
+    "items": [
+      "Off",
+      "L Sine",
+      "C Sine",
+      "C Cos",
+      "R Sine",
+      "LFO",
+      "Gate Env"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "lpg_decay": {
+    "label": "Gate Decay",
+    "lo": 60,
+    "hi": 8000,
+    "default": 900,
+    "kind": "float",
+    "items": null,
+    "unit": "ms",
+    "exp": 2
+  },
+  "lpg_open": {
+    "label": "Gate Open",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "lpg_ctrl": {
+    "label": "Gate Ctrl",
+    "lo": -1,
+    "hi": 1,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "lpg_material": {
+    "label": "Gate Material",
+    "lo": 0,
+    "hi": 2,
+    "default": 0,
+    "kind": "enum",
+    "items": [
+      "Hard",
+      "Balanced",
+      "Soft"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "index_env": {
+    "label": "Gate Mod Depth",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "glide_ms": {
+    "label": "Glide",
+    "lo": 0,
+    "hi": 2000,
+    "default": 0,
+    "kind": "float",
+    "items": null,
+    "unit": "ms",
+    "exp": 3
+  },
+  "bend_range": {
+    "label": "Bend Range",
+    "lo": 0,
+    "hi": 24,
+    "default": 2,
+    "kind": "int",
+    "items": null,
+    "unit": "st",
+    "exp": 1
+  },
+  "output_mode": {
+    "label": "Waveform",
+    "lo": 0,
+    "hi": 3,
+    "default": 0,
+    "kind": "enum",
+    "items": [
+      "Sine / Cos",
+      "Saw / Cosaw",
+      "Triangle",
+      "Square"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "width": {
+    "label": "Width",
+    "lo": 0,
+    "hi": 1,
+    "default": 1,
+    "kind": "float",
+    "items": null,
+    "unit": null,
+    "exp": 1
+  },
+  "output_db": {
+    "label": "Output Gain",
+    "lo": -60,
+    "hi": 0,
+    "default": -18,
+    "kind": "float",
+    "items": null,
+    "unit": "dB",
+    "exp": 1
+  },
+  "filter_mode": {
+    "label": "Mod Filter",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "enum",
+    "items": [
+      "3 kHz",
+      "6 kHz"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "phase_direction": {
+    "label": "Phase Direction",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "enum",
+    "items": [
+      "Opposing",
+      "Same"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "square_dry": {
+    "label": "Square PM",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "enum",
+    "items": [
+      "Modulated",
+      "Dry"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "sync_outer": {
+    "label": "Outer Sync",
+    "lo": 0,
+    "hi": 1,
+    "default": 0,
+    "kind": "enum",
+    "items": [
+      "Off",
+      "Center"
+    ],
+    "unit": null,
+    "exp": 1
+  },
+  "lfo_hz": {
+    "label": "LFO Rate",
+    "lo": 0.01,
+    "hi": 30,
+    "default": 0.2,
+    "kind": "float",
+    "items": null,
+    "unit": "Hz",
+    "exp": 3
+  },
+  "ratio_source": {
+    "label": "Ratio Mod",
+    "lo": 0,
+    "hi": 2,
+    "default": 0,
+    "kind": "enum",
+    "items": [
+      "Off",
+      "LFO",
+      "Gate Env"
+    ],
+    "unit": null,
+    "exp": 1
+  }
+}

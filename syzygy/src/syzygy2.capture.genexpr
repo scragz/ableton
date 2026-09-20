@@ -1,0 +1,14 @@
+// Kept separate so Panic never destroys the preceding audio.
+Buffer memory;
+Param paused(0);
+History index(0);
+History valid(0);
+frames=dim(memory);
+if (frames>1 && paused<0.5) {
+    poke(memory,in1,index,0);
+    poke(memory,in2,index,1);
+    index=wrap(index+1,0,frames);
+    valid=min(valid+1,frames);
+}
+out1=index;
+out2=valid;

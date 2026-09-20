@@ -1,0 +1,167 @@
+//@doc
+// Build input for scripts/build.py; device/hypna-engine.genexpr is its output.
+// `//@voices` blocks repeat once per voice, with $V as the voice index and $F
+// as that voice's default frequency. A `//@fundamental` block inside one emits
+// for voice 0 only. Every other $NAME is a layout constant read from
+// src/hypna-waves.json, so the wavetable and the code indexing it cannot drift
+// apart. This block itself is stripped from the output.
+//@end
+// Factory table: $BANKS banks, $MIPS bandwidth levels, $FRAMES frames.
+tableosc(ph, hz, position, sr, table, bank) {
+    level = clamp(ceil(log2(max(1, hz * $PARTIALS / (sr * 0.45)))), 0, $MIPMAX);
+    frame = clamp(position, 0, $FRAMEMAX);
+    first = min(floor(frame), $BLENDMAX);
+    blend = frame - first;
+    ix = wrap(ph, 0, 1) * $CYCLE;
+    a = floor(ix);
+    b = wrap(a + 1, 0, $CYCLE);
+    frac = ix - a;
+    offset = ((clamp(floor(bank), 0, $BANKMAX) * $MIPS + level) * $FRAMES + first) * $CYCLE;
+    w0 = mix(peek(table, offset + a, 0), peek(table, offset + b, 0), frac);
+    w1 = mix(peek(table, offset + $CYCLE + a, 0), peek(table, offset + $CYCLE + b, 0), frac);
+    return mix(w0, w1, blend);
+}
+Buffer waves("hypna_factory_v2");
+Param wavetable(0);
+Param wavepos(0);
+Param shape(0);
+Param attack(10);
+Param release(1000);
+Param slew(0);
+Param crossfade(20);
+Param master(-12);
+Param wet(0);
+Param revtime(1700);
+Param size(100);
+Param damping(60);
+History smoothwave($WAVEMID);
+History bankfrom(0);
+History bankto(0);
+History bankfade(1);
+History smoothmaster(0);
+History smoothwet(0);
+//@voices
+Param freq$V($F);
+Param gate$V(0);
+Param gain$V(0);
+Param pan$V(0);
+History env$V(0);
+History amp$V(1);
+History panning$V(0.5);
+History phaseA$V(0);
+History phaseB$V(0);
+History targetA$V($F);
+History targetB$V($F);
+History actualA$V($F);
+History actualB$V($F);
+History side$V(0);
+History progress$V(1);
+History accepted$V($F);
+//@end
+Delay d0(192000);
+Delay d1(192000);
+Delay d2(192000);
+Delay d3(192000);
+History low0(0);
+History low1(0);
+History low2(0);
+History low3(0);
+smooth = exp(-1 / (0.01 * samplerate));
+smoothwave = mix((clamp(wavepos, -100, 100) + 100) * $WAVESCALE, smoothwave, smooth);
+// Finish each 50 ms bank fade, then accept the latest selection. All voices
+// share its timing; rapid automation never cuts off an unfinished transition.
+requestedbank = clamp(floor(wavetable + 0.5), 0, $BANKMAX);
+if ((requestedbank != bankto) && (bankfade >= 1)) {
+    bankfrom = bankto;
+    bankto = requestedbank;
+    bankfade = 0;
+}
+bankfade = min(1, bankfade + 1 / (0.05 * samplerate));
+bankblend = 0.5 - 0.5 * cos(bankfade * pi);
+smoothmaster = mix(pow(10, master / 20), smoothmaster, smooth);
+smoothwet = mix(clamp(wet * 0.01, 0, 1), smoothwet, smooth);
+slewcoeff = slew <= 0 ? 0 : exp(-1 / (max(slew, 0.01) * 0.001 * samplerate));
+left = 0;
+right = 0;
+//@voices
+
+// Voice $V: finish the current crossfade before accepting the latest retune.
+// The outgoing oscillator is held; the incoming oscillator starts phase-aligned.
+if ((freq$V != accepted$V) && (progress$V >= 1)) {
+    if (side$V < 0.5) { targetB$V = freq$V; phaseB$V = phaseA$V; actualB$V = actualA$V; }
+    else { targetA$V = freq$V; phaseA$V = phaseB$V; actualA$V = actualB$V; }
+    side$V = 1 - side$V;
+    progress$V = 0;
+    accepted$V = freq$V;
+}
+progress$V = min(1, progress$V + 1 / max(1, crossfade * 0.001 * samplerate));
+actualA$V = mix(targetA$V, actualA$V, slewcoeff);
+actualB$V = mix(targetB$V, actualB$V, slewcoeff);
+fa$V = clamp(actualA$V, 0.000001, samplerate * 0.45);
+fb$V = clamp(actualB$V, 0.000001, samplerate * 0.45);
+phaseA$V = wrap(phaseA$V + fa$V / samplerate, 0, 1);
+phaseB$V = wrap(phaseB$V + fb$V / samplerate, 0, 1);
+pos$V = smoothwave;
+//@fundamental
+pos0 = shape == 2 ? $TRIANGLE : (shape == 3 ? $FRAMEMAX : smoothwave);
+//@end
+voicebank$V = bankto;
+oldbank$V = bankfrom;
+//@fundamental
+voicebank0 = shape > 0 ? 0 : bankto;
+oldbank0 = shape > 0 ? 0 : bankfrom;
+//@end
+a$V = tableosc(phaseA$V, fa$V, pos$V, samplerate, waves, voicebank$V);
+b$V = tableosc(phaseB$V, fb$V, pos$V, samplerate, waves, voicebank$V);
+if (bankfade < 1) {
+    olda$V = tableosc(phaseA$V, fa$V, pos$V, samplerate, waves, oldbank$V);
+    oldb$V = tableosc(phaseB$V, fb$V, pos$V, samplerate, waves, oldbank$V);
+    a$V = mix(olda$V, a$V, bankblend);
+    b$V = mix(oldb$V, b$V, bankblend);
+}
+//@fundamental
+a0 = shape == 1 ? sin(phaseA0 * twopi) : a0;
+b0 = shape == 1 ? sin(phaseB0 * twopi) : b0;
+//@end
+// Do not fold an out-of-band ratio down to an unrelated audible pitch.
+a$V = actualA$V < samplerate * 0.45 ? a$V : 0;
+b$V = actualB$V < samplerate * 0.45 ? b$V : 0;
+blend$V = 0.5 - 0.5 * cos(progress$V * pi);
+weight$V = side$V < 0.5 ? 1 - blend$V : blend$V;
+osc$V = mix(a$V, b$V, weight$V);
+duration$V = gate$V > 0.5 ? attack : release;
+env$V = clamp(env$V + (gate$V > 0.5 ? 1 : -1) / max(1, duration$V * 0.001 * samplerate), 0, 1);
+amp$V = mix(gain$V <= -40 ? 0 : pow(10, gain$V / 20), amp$V, smooth);
+panning$V = mix(clamp((pan$V + 100) / 200, 0, 1), panning$V, smooth);
+voice$V = osc$V * env$V * amp$V * 0.2;
+left = left + voice$V * cos(panning$V * pi * 0.5);
+right = right + voice$V * sin(panning$V * pi * 0.5);
+//@end
+// Four-line orthogonal feedback delay network. RT60 is in milliseconds.
+roomscale = 0.25 + 0.75 * clamp(size / 100, 0.01, 1);
+t0 = min(191998, samplerate * 0.0297 * roomscale);
+t1 = min(191998, samplerate * 0.0371 * roomscale);
+t2 = min(191998, samplerate * 0.0411 * roomscale);
+t3 = min(191998, samplerate * 0.0437 * roomscale);
+r0 = d0.read(t0);
+r1 = d1.read(t1);
+r2 = d2.read(t2);
+r3 = d3.read(t3);
+cutoff = 18000 * pow(0.025, clamp(damping / 100, 0, 1));
+lp = exp(-twopi * min(cutoff, samplerate * 0.45) / samplerate);
+low0 = mix(r0, low0, lp);
+low1 = mix(r1, low1, lp);
+low2 = mix(r2, low2, lp);
+low3 = mix(r3, low3, lp);
+decay = max(0.4, revtime * 0.001) * samplerate;
+d0.write(left + 0.5 * (low0 + low1 + low2 + low3) * pow(0.001, t0 / decay));
+d1.write(right + 0.5 * (low0 - low1 + low2 - low3) * pow(0.001, t1 / decay));
+d2.write(left + 0.5 * (low0 + low1 - low2 - low3) * pow(0.001, t2 / decay));
+d3.write(right + 0.5 * (low0 - low1 - low2 + low3) * pow(0.001, t3 / decay));
+wetleft = (r0 + r2) * 0.25;
+wetright = (r1 + r3) * 0.25;
+out1 = tanh(mix(left, wetleft, smoothwet) * smoothmaster);
+out2 = tanh(mix(right, wetright, smoothwet) * smoothmaster);
+// Inspection taps, not routed to Live's main outputs.
+out3 = osc0;
+out4 = env0;

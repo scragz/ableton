@@ -1,0 +1,37 @@
+{
+  "file": "device/Materia.amxd",
+  "bytes": 595128,
+  "embedded_files": [
+    "Materia.amxd",
+    "materia.control.js",
+    "materia.panel.js",
+    "materia.editor.js",
+    "materia.routing.js"
+  ],
+  "patch_matrix_button": true,
+  "native_checks": {
+    "cases": [
+      {
+        "name": "Click BER into LP1",
+        "actual": 4,
+        "expected": 4
+      },
+      {
+        "name": "Click again disconnects",
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "name": "Dropdown update reaches matrix",
+        "actual": 2,
+        "expected": 2
+      },
+      {
+        "name": "Clock filter connects ICLK",
+        "actual": 17,
+        "expected": 17
+      }
+    ],
+    "errors": []
+  }
+}

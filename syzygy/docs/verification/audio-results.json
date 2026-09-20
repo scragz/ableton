@@ -1,0 +1,52 @@
+{
+  "rest": {
+    "sample_rate": 44100,
+    "duration_seconds": 1.2016326530612245,
+    "peak": 0.0,
+    "rms": 0.0,
+    "last_second_rms": 0.0
+  },
+  "default": {
+    "sample_rate": 44100,
+    "duration_seconds": 5.0009977324263035,
+    "peak": 0.006989516783505678,
+    "rms": 0.0011329849560578447,
+    "last_second_rms": 0.0011785472365462822
+  },
+  "sustain": {
+    "sample_rate": 44100,
+    "duration_seconds": 12.001814058956915,
+    "peak": 0.03239854425191879,
+    "rms": 0.011945307794100801,
+    "last_second_rms": 0.016129611688433312
+  },
+  "extreme": {
+    "sample_rate": 44100,
+    "duration_seconds": 6.000907029478458,
+    "peak": 0.3726184070110321,
+    "rms": 0.07904152255237173,
+    "last_second_rms": 0.09824477878113332
+  },
+  "long_dark": {
+    "sample_rate": 44100,
+    "duration_seconds": 4.002539682539682,
+    "peak": 0.008307462558150291,
+    "rms": 0.0010652737784338888,
+    "last_second_rms": 0.0013011631801511582
+  },
+  "mono": {
+    "sample_rate": 44100,
+    "duration_seconds": 4.002539682539682,
+    "peak": 0.004600645042955875,
+    "rms": 0.0009293550403185165,
+    "last_second_rms": 0.000928922126053683,
+    "last_second_stereo_difference": 0.0
+  },
+  "panic": {
+    "sample_rate": 44100,
+    "duration_seconds": 3.500408163265306,
+    "peak": 0.005647043697535992,
+    "rms": 0.0006795542003166127,
+    "last_second_rms": 0.0
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "cases": [
+    {
+      "name": "Click BER into LP1",
+      "actual": 4,
+      "expected": 4
+    },
+    {
+      "name": "Click again disconnects",
+      "actual": 0,
+      "expected": 0
+    },
+    {
+      "name": "Dropdown update reaches matrix",
+      "actual": 2,
+      "expected": 2
+    },
+    {
+      "name": "Clock filter connects ICLK",
+      "actual": 17,
+      "expected": 17
+    }
+  ],
+  "errors": []
+}

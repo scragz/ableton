@@ -1,0 +1,191 @@
+// Syzygy: four interacting delay reservoirs and an orthogonal scatter field.
+// All feedback reads precede writes. Times are seconds, converted at runtime.
+Param active(0, min=0, max=1);
+Param excite(0.32, min=0, max=1);
+Param tone(110, min=25, max=1600);
+Param ratio(1.618, min=0.125, max=8);
+Param fm(1.8, min=0, max=12);
+Param source(2, min=0, max=2);
+Param feedback(0.72, min=0, max=1);
+Param size(0.38, min=0, max=1);
+Param diffusion(0.7, min=0, max=1);
+Param damping(0.55, min=0, max=1);
+Param drive(0.3, min=0, max=1);
+Param drift(0.3, min=0, max=1);
+Param coupling(0.25, min=0, max=1);
+Param body(0.35, min=0, max=1);
+Param decay(0.65, min=0, max=1);
+Param space(0.5, min=0, max=1);
+Param width(0.75, min=0, max=1);
+Param azimuth(0.5, min=0, max=1);
+Param elevation(0.5, min=0, max=1);
+Param wander(1, min=0, max=1);
+Param rate(0.12, min=0.01, max=1);
+Param output(-18, min=-60, max=0);
+Param strike(0, min=0, max=1);
+Param m0(0, min=-1, max=1);
+Param m1(0, min=-1, max=1);
+Param m2(0, min=-1, max=1);
+Param m3(0, min=-1, max=1);
+Param m4(0, min=-1, max=1);
+Param m5(0, min=-1, max=1);
+Delay d1(192000);
+Delay d2(192000);
+Delay d3(192000);
+Delay d4(192000);
+Delay r1(16000);
+Delay r2(16000);
+Delay a1(16000);
+Delay a2(16000);
+History lp1(0);
+History lp2(0);
+History lp3(0);
+History lp4(0);
+History energy(0);
+History slowNoise(0);
+History driftPhase(0);
+History phaseA(0);
+History phaseB(0);
+History phaseX(0);
+History phaseY(0.25);
+History speedX(0.73);
+History speedY(1.17);
+History burst(0);
+History oldStrike(0);
+History smoothActive(0);
+History smoothExcite(0.32);
+History smoothTone(110);
+History smoothFeedback(0.72);
+History smoothSize(0.38);
+History smoothDamping(0.55);
+History smoothDrive(0.3);
+History smoothBody(0.35);
+History smoothSpace(0.5);
+History smoothX(0.5);
+History smoothY(0.5);
+History smoothOutput(0);
+History smoothRatio(1.618);
+History smoothFM(1.8);
+History smoothDiffusion(0.7);
+History smoothWidth(0.75);
+History smoothDecay(0.65);
+
+// 30 ms control smoothing; slower retuning keeps gestures fluid.
+slew = 1 - exp(-1 / (samplerate * 0.03));
+retune = 1 - exp(-1 / (samplerate * 0.3));
+smoothActive += (active - smoothActive) * slew;
+smoothExcite += (excite - smoothExcite) * slew;
+smoothTone += (clamp(tone * pow(2, m0 * coupling), 25, 1600) - smoothTone) * retune;
+smoothFeedback += (clamp(feedback + m1 * coupling * 0.15, 0, 1) - smoothFeedback) * slew;
+smoothSize += (clamp(size + m2 * coupling * 0.25, 0, 1) - smoothSize) * retune;
+smoothDamping += (clamp(damping + m3 * coupling * 0.3, 0, 1) - smoothDamping) * slew;
+smoothDrive += (drive - smoothDrive) * slew;
+smoothBody += (clamp(body + m4 * coupling * 0.3, 0, 1) - smoothBody) * slew;
+smoothSpace += (clamp(space + m5 * coupling * 0.3, 0, 1) - smoothSpace) * slew;
+smoothOutput += (pow(10, output / 20) - smoothOutput) * slew;
+smoothRatio += (ratio - smoothRatio) * slew;
+smoothFM += (fm - smoothFM) * slew;
+smoothDiffusion += (diffusion - smoothDiffusion) * slew;
+smoothWidth += (width - smoothWidth) * slew;
+smoothDecay += (decay - smoothDecay) * slew;
+
+// Noise, sparse dust, and mutually influenced FM provide continuous excitation.
+n = noise();
+slowNoise += (n - slowNoise) * (1 - exp(-1 / (samplerate * 2.7)));
+driftPhase = wrap(driftPhase + (0.013 + drift * 0.09) / samplerate, 0, 1);
+motion = sin(driftPhase * twopi) * drift;
+phaseB = wrap(phaseB + smoothTone * smoothRatio / samplerate, 0, 1);
+phaseA = wrap(phaseA + smoothTone * (1 + motion * 0.006) / samplerate, 0, 1);
+fmSignal = sin(phaseA * twopi + sin(phaseB * twopi + lp3 * coupling * 2) * smoothFM);
+dust = (abs(n) > 1 - (3 + smoothExcite * 95) / samplerate) * n;
+burst = max((strike > oldStrike) * strike, burst * exp(-1 / (samplerate * 0.075)));
+oldStrike = strike;
+noiseSignal = n * 0.09 + dust * 5;
+sourceSignal = source < 0.5 ? noiseSignal : (source < 1.5 ? fmSignal * 0.23 : noiseSignal * 0.6 + fmSignal * 0.14);
+excitation = (sourceSignal * smoothExcite + n * burst * 0.35) * smoothActive;
+
+// Incommensurate delay lengths; time modulation is driven by network and drift.
+baseTime = 0.009 + smoothSize * smoothSize * 0.39;
+t1 = clamp(baseTime * (1 + motion * 0.013 + lp4 * coupling * 0.002) * samplerate, 2, 191996);
+t2 = clamp(baseTime * 1.271 * (1 - motion * 0.011) * samplerate, 2, 191996);
+t3 = clamp(baseTime * 1.633 * (1 + motion * 0.017) * samplerate, 2, 191996);
+t4 = clamp(baseTime * 2.117 * (1 + slowNoise * drift * 0.4) * samplerate, 2, 191996);
+v1 = d1.read(t1, interp="linear");
+v2 = d2.read(t2, interp="linear");
+v3 = d3.read(t3, interp="linear");
+v4 = d4.read(t4, interp="linear");
+
+// Spectral loss and RMS-dependent gain operate INSIDE the feedback loop.
+cutoff = 350 + pow(1 - smoothDamping, 2) * 15500;
+loss = 1 - exp(-twopi * cutoff / samplerate);
+lp1 += (dcblock(v1) - lp1) * loss;
+lp2 += (dcblock(v2) - lp2) * loss;
+lp3 += (dcblock(v3) - lp3) * loss;
+lp4 += (dcblock(v4) - lp4) * loss;
+instantEnergy = (lp1 * lp1 + lp2 * lp2 + lp3 * lp3 + lp4 * lp4) * 0.25;
+energy += (instantEnergy - energy) * (1 - exp(-1 / (samplerate * (instantEnergy > energy ? 0.008 : 0.9))));
+regulation = 1 / sqrt(1 + energy * (4 + smoothDrive * 12));
+regen = (0.15 + smoothFeedback * 1.16) * regulation * smoothActive;
+
+// A normalized Hadamard junction mixes all four reservoirs.
+h1 = (lp1 + lp2 + lp3 + lp4) * 0.5;
+h2 = (lp1 - lp2 + lp3 - lp4) * 0.5;
+h3 = (lp1 + lp2 - lp3 - lp4) * 0.5;
+h4 = (lp1 - lp2 - lp3 + lp4) * 0.5;
+sat = 1 + smoothDrive * 3;
+d1.write(tanh((mix(lp2, h1, smoothDiffusion) * regen + excitation) * sat) / sat);
+d2.write(tanh((mix(lp3, h2, smoothDiffusion) * regen - excitation * 0.71) * sat) / sat);
+d3.write(tanh((mix(lp4, h3, smoothDiffusion) * regen + excitation * 0.53) * sat) / sat);
+d4.write(tanh((mix(lp1, h4, smoothDiffusion) * regen - excitation * 0.37) * sat) / sat);
+
+// Two detuned, DC-blocked comb bodies accumulate metallic resonances.
+rv1 = r1.read(clamp(samplerate / smoothTone, 2, 15996), interp="linear");
+rv2 = r2.read(clamp(samplerate / (smoothTone * 1.4983), 2, 15996), interp="linear");
+r1.write(tanh(dcblock(rv1) * (0.75 + smoothDecay * 0.235) * smoothActive + h1 * 0.15));
+r2.write(tanh(dcblock(rv2) * (0.73 + smoothDecay * 0.245) * smoothActive + h4 * 0.15));
+b1 = mix(lp1, rv1 * 0.5, smoothBody);
+b2 = mix(lp2, rv2 * 0.5, smoothBody);
+b3 = mix(lp3, -rv1 * 0.5, smoothBody);
+b4 = mix(lp4, rv2 * 0.5, smoothBody);
+
+// Independent spatial LFOs choose a new speed when each cycle wraps.
+nx = phaseX + rate * speedX / samplerate;
+ny = phaseY + rate * speedY / samplerate;
+speedX = nx >= 1 ? 0.37 + abs(noise()) * 1.19 : speedX;
+speedY = ny >= 1 ? 0.51 + abs(noise()) * 1.37 : speedY;
+phaseX = wrap(nx, 0, 1);
+phaseY = wrap(ny, 0, 1);
+targetX = clamp(azimuth + sin(phaseX * twopi) * 0.44 * wander, 0, 1);
+targetY = clamp(elevation + sin(phaseY * twopi) * 0.44 * wander, 0, 1);
+smoothX += (targetX - smoothX) * slew;
+smoothY += (targetY - smoothY) * slew;
+
+// Two Givens rotations compose an orthogonal 4x4 scatter matrix.
+cx = cos(smoothX * pi * 0.5);
+sx = sin(smoothX * pi * 0.5);
+cy = cos(smoothY * pi * 0.5);
+sy = sin(smoothY * pi * 0.5);
+q1 = cx * b1 - sx * b2;
+q2 = sx * b1 + cx * b2;
+q3 = cx * b3 - sx * b4;
+q4 = sx * b3 + cx * b4;
+left = ((cy * q1 - sy * q3) + (sy * q2 + cy * q4)) * 0.70710678;
+right = ((cy * q2 - sy * q4) - (sy * q1 + cy * q3)) * 0.70710678;
+
+// A pair of allpasses adds late spatial diffusion without unbounded gain.
+av1 = a1.read(clamp(0.0239 * samplerate, 2, 15996), interp="linear");
+av2 = a2.read(clamp(0.0371 * samplerate, 2, 15996), interp="linear");
+wetL = av1 - left * 0.61;
+wetR = av2 - right * 0.61;
+a1.write((left + wetL * 0.61) * smoothActive);
+a2.write((right + wetR * 0.61) * smoothActive);
+spL = mix(left, wetL, smoothSpace);
+spR = mix(right, wetR, smoothSpace);
+mid = (spL + spR) * 0.5;
+side = (spL - spR) * 0.5 * smoothWidth;
+// Final bounded output is a backstop; the regulator above shapes the network.
+out1 = tanh(dcblock(mid + side) * 1.8) * 0.89 * smoothOutput * smoothActive;
+out2 = tanh(dcblock(mid - side) * 1.8) * 0.89 * smoothOutput * smoothActive;
+out3 = sqrt(max(energy, 0));
+out4 = smoothX;
+out5 = smoothY;
