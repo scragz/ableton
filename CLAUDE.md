@@ -7,7 +7,7 @@ This folder is a workspace, not a repo. Each subfolder is its **own git repo**
 
 | Folder | Device | Type | Build | Reference / inspiration |
 | --- | --- | --- | --- | --- |
-| `chiasmus/` | Chiasmus | Audio effect: reverse delay as a 6-voice grain scheduler; Free/Sync/Onset triggers, Rev/Alt/ABBA patterns, Cross morphs feedback between forward echo and re-reversing loop | `python3 scripts/build.py` | Survey of reverse delays; see README "Influences and differences" |
+| `chiasmus/` | Chiasmus | Audio effect: reverse delay, Grain (6 windowed voices) or Tape (one head, Hermite stop/fast-forward catch-up) engine; Free/Sync/Onset triggers, Rev/Alt/ABBA patterns, Cross (blend or per-chunk Scatter) between forward echo and re-reversing loop. Builds everything into `device/` (no `scripts/build/`) | `python3 scripts/build.py` | Survey of reverse delays; see README "Influences and differences" |
 | `fluxion/` | Fluxion | MIDI effect: 16-step rhythm channel, curve editor, Main/Aux1/Aux2 note lanes. Every value is a Live parameter (309), per-step values banked 16x so modulators can map them | `node scripts/build.mjs` | Flux manual (`docs/flux-user-manual.pdf`) |
 | `hypna/` | Hypna | Instrument: 5-voice prime-ratio drone, wavetables, reverb | `python3 scripts/build.py` | Drone module; see README "Differences from the reference" |
 | `materia/` | Materia | Audio effect: pool of 8-bit Leibniz-style bus modules, free routing | `python3 scripts/build.py` | Xaoc Leibniz; spec in `docs/spec.md` (v0.2) |

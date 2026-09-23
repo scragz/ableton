@@ -1,4 +1,5 @@
-"""Build Chiasmus: stage an editable patch in scripts/build/, then freeze a self-contained device/Chiasmus.amxd."""
+"""Build Chiasmus into device/: the editable patch and loose deps (Chiasmus.maxpat, *.js, chiasmus.gendsp)
+sit beside the frozen, self-contained Chiasmus.amxd. Open device/Chiasmus.maxpat in Max to live-edit."""
 from pathlib import Path
 import json
 import shutil
@@ -7,12 +8,12 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 DEST = ROOT / 'device'
-STAGE = ROOT / 'scripts/build'
+STAGE = DEST  # all build output lives in device/ (gitignored)
 sys.path.insert(0, str(ROOT.parent / 'theme'))
 import theme as T  # noqa: E402  shared device theme
 
 VERSION = dict(major=9, minor=0, revision=9, architecture='x64', modernui=1)
-W, H = 846, 169
+W, H = 906, 169
 B, L, P = [], [], {}
 
 DIVNAMES = ['1/32', '1/16T', '1/16', '1/8T', '1/16D', '1/8', '1/4T', '1/8D', '1/4', '1/4D', '1/2', '1/2D', '1 Bar', '2 Bars']
@@ -69,33 +70,39 @@ def build():
     wire('control', 'panel', 1)
 
     # Time (x 2..188). Keep in sync with FIELDSETS in src/chiasmus.panel.js.
+    # Top: Trigger over Division | Pre | Sens.  Bottom row, level with the other knobs: Freeze | Time | Drift.
     tab('trigger', 'Trigger', ['Free', 'Sync', 'Onset'], 0, [10, 22, 64, 54])
     parameter('division', 'Division', 0, len(DIVNAMES) - 1, 8, [10, 82, 64, 18], cls='live.menu', enum=DIVNAMES, **T.menu())
-    dial('time', 'Time', 20, 4000, 400, 20, 108, unit=2, exponent=2.5)
     dial('pre', 'Pre', 0, 2000, 0, 86, 20, unit=2, exponent=2.5)
-    dial('drift', 'Drift', 0, 100, 0, 86, 104, unit=5)
     dial('sens', 'Sens', 0, 100, 50, 138, 20, unit=5)
-    parameter('freeze', 'Freeze', 0, 1, 0, [136, 138, 48, 18], cls='live.text', enum=['Off', 'On'],
+    parameter('freeze', 'Freeze', 0, 1, 0, [10, 121, 64, 18], cls='live.text', enum=['Off', 'On'],
               text='Freeze', texton='Freeze', mode=1, **T.button())
+    dial('time', 'Time', 20, 4000, 400, 86, 104, unit=2, exponent=2.5)
+    dial('drift', 'Drift', 0, 100, 0, 138, 104, unit=5)
     # Direction (190..322)
     tab('pattern', 'Pattern', ['Rev', 'Alt', 'ABBA'], 0, [198, 22, 60, 54])
     dial('flip', 'Flip', 0, 100, 0, 206, 104, unit=5)
     dial('pitch', 'Pitch', -12, 12, 0, 270, 20, unit=7, ptype=1)
     dial('fine', 'Fine', -50, 50, 0, 270, 104, unit=0, ptype=1)
-    # Shape (324..560): display drawn by the panel above these.
-    dial('smooth', 'Smooth', 0, 100, 30, 340, 106, unit=5)
-    dial('swell', 'Swell', -100, 100, 0, 410, 106, unit=5)
-    # Loop (562..712)
-    dial('feedback', 'Feedback', 0, 100, 35, 570, 20, unit=5)
-    dial('cross', 'Cross', 0, 100, 0, 618, 20, unit=5)
-    dial('diffuse', 'Diffuse', 0, 100, 0, 666, 20, unit=5)
-    dial('tone', 'Tone', -100, 100, 0, 570, 104, unit=5)
-    dial('drive', 'Drive', 0, 100, 0, 618, 104, unit=5)
-    # Output (714..844)
-    dial('width', 'Width', 0, 100, 0, 724, 20, unit=5)
-    dial('duck', 'Duck', 0, 100, 0, 782, 20, unit=5)
-    dial('mix', 'Dry/Wet', 0, 100, 50, 724, 104, unit=5)
-    dial('output', 'Output', -24, 12, 0, 782, 104, unit=4)
+    # Shape (324..620): display drawn by the panel above these.
+    dial('smooth', 'Smooth', 0, 100, 30, 334, 104, unit=5)
+    dial('swell', 'Swell', -100, 100, 0, 388, 104, unit=5)
+    dial('zip', 'Zip', 0, 100, 30, 442, 104, unit=5)
+    dial('wow', 'Wow', 0, 100, 0, 496, 104, unit=5)
+    tab('engine', 'Engine', ['Grain', 'Tape'], 0, [552, 110, 60, 36])
+    # Loop (622..772)
+    dial('feedback', 'Feedback', 0, 100, 35, 630, 20, unit=5)
+    dial('cross', 'Cross', 0, 100, 0, 678, 20, unit=5)
+    dial('diffuse', 'Diffuse', 0, 100, 0, 726, 20, unit=5)
+    dial('tone', 'Tone', -100, 100, 0, 630, 104, unit=5)
+    dial('drive', 'Drive', 0, 100, 0, 678, 104, unit=5)
+    parameter('scatter', 'Scatter', 0, 1, 0, [724, 121, 46, 18], cls='live.text', enum=['Off', 'On'],
+              text='Scatter', texton='Scatter', mode=1, **T.button())
+    # Output (774..904)
+    dial('width', 'Width', 0, 100, 0, 784, 20, unit=5)
+    dial('duck', 'Duck', 0, 100, 0, 842, 20, unit=5)
+    dial('mix', 'Dry/Wet', 0, 100, 50, 784, 104, unit=5)
+    dial('output', 'Output', -24, 12, 0, 842, 104, unit=4)
 
     # DSP
     code = (ROOT / 'src/chiasmus.genexpr').read_text()
@@ -134,7 +141,8 @@ def build():
     P['parameterbanks'] = {
         '0': dict(index=0, name='Chiasmus', parameters=['time', 'feedback', 'cross', 'pitch', 'smooth', 'swell', 'mix', 'freeze']),
         '1': dict(index=1, name='Motion', parameters=['trigger', 'division', 'pre', 'drift', 'pattern', 'flip', 'fine', 'sens']),
-        '2': dict(index=2, name='Color', parameters=['tone', 'drive', 'diffuse', 'width', 'duck', 'output', '-', '-'])}
+        '2': dict(index=2, name='Tape', parameters=['engine', 'zip', 'wow', 'scatter', 'tone', 'drive', 'diffuse', '-']),
+        '3': dict(index=3, name='Output', parameters=['width', 'duck', 'output', '-', '-', '-', '-', '-'])}
     P['inherited_shortname'] = 1
 
     deps = ['chiasmus.control.js', 'chiasmus.panel.js', 'chiasmus.theme.js']

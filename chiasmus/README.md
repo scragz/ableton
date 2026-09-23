@@ -1,11 +1,13 @@
 # Chiasmus
 
-Max for Live **audio effect**: a reverse delay built as a six-voice grain scheduler over one stereo
-buffer. Named for the rhetorical A-B-B-A reversal — the Cross knob lets each pass through the loop
+Max for Live **audio effect**: a reverse delay with two engines — **Grain** (six windowed voices) and
+**Tape** (one read head with continuous motion) — over one stereo buffer. Treat it like a pedal: zero
+latency, no lookahead. Named for the rhetorical A-B-B-A reversal — the Cross knob lets each pass through the loop
 re-reverse the last, so repeats alternate direction.
 
-Build: `cd chiasmus && python3 scripts/build.py` → frozen `device/Chiasmus.amxd` (device code `aaaa`).
-Editable staging patch: `scripts/build/Chiasmus.maxpat`.
+Build: `cd chiasmus && python3 scripts/build.py`. All output goes to `device/` (gitignored): the frozen,
+self-contained `Chiasmus.amxd` (device code `aaaa`) plus the editable `Chiasmus.maxpat`, loose JS and
+`chiasmus.gendsp` beside it. Unlike the other devices there is no `scripts/build/`.
 
 ## Signal flow
 
@@ -16,14 +18,30 @@ in ──┬──────────────────────�
             └── tone ◄ drive ◄──────── mix(echo, wet, Cross) ◄───┘  × Feedback
 ```
 
-- A grain reads the most recent `rate × length` of audio, **backwards** from the write head (or
+### Engines
+
+**Grain.** A grain reads the most recent `rate × length` of audio, **backwards** from the write head (or
   forwards from `span` behind it). Reading starts at the newest sample, so reverse has no added
   latency beyond Pre.
-- Window: equal-power fades whose width is **Smooth** (1–50 % of the grain; grains overlap by that
+Window: equal-power fades whose width is **Smooth** (1–50 % of the grain; grains overlap by that
   much so butt-joins stay constant-power), then skewed by **Swell** (+ = reverse-cymbal rise, − = pluck).
+**Tape.** One head. Each chunk it plays backwards (Swell shapes the level), then a cubic Hermite
+*catch-up* carries it back to the write head with position **and velocity** continuous: the head slows,
+stops, fast-forwards, stops, and drops into the next reverse — no splice crossfade anywhere. **Smooth**
+sets the catch-up length (5–50 % of the chunk), **Zip** how loud it is (0 = a long level dip, 100 = hear
+the whole spin). A speed-tracking low-pass gives tape HF loss at 1× and tames the fast-forward. If a
+new chunk arrives mid-play (Onset, Drift) the catch-up starts from wherever the head is, at its current
+speed, like a real transport. **Wow** (both engines) is a shared wobble — 0.55 Hz wow, 6.3 Hz flutter,
+slow random drift — that only ever reads *older* audio, so it never overtakes the write head.
+
+### Loop
+
 - **Cross** 0: feedback comes from a forward echo tap, so every repeat is reversed the same way.
   **Cross** 100: feedback is the grain output, so each pass re-reverses (R, F, R, F…) with drifting
   splice points. In between is a blend of both loops.
+- **Scatter** on: instead of blending, each grain (or tape chunk) tosses a coin with probability Cross;
+  winners go into the loop at full level, losers don't. Echo still returns at (1 − Cross). The loop gets
+  its own diffusion chain so Diffuse smears it the same way as the output.
 
 ## Controls
 
@@ -38,19 +56,29 @@ in ──┬──────────────────────�
 | Direction | Pattern | Rev / Alt (R F R F) / ABBA (R F F R) |
 | | Flip | chance that any grain inverts the pattern |
 | | Pitch / Fine | read rate, ±12 st and ±50 ct; accumulates through Cross feedback |
-| Shape | Smooth / Swell | grain window (drawn live in the display) |
-| Loop | Feedback, Cross, Diffuse, Tone, Drive | see above; Tone is a tilt around 800 Hz, Drive is tanh with gain compensation (always soft-limits the loop) |
+| Shape | Smooth / Swell | Grain: window width and skew. Tape: catch-up length and play-level skew (preview drawn live) |
+| | Zip | Tape only (dimmed in Grain): level of the catch-up spin |
+| | Wow | wow/flutter depth, both engines |
+| | Engine | Grain / Tape |
+| Loop | Feedback, Cross, Scatter, Diffuse, Tone, Drive | see above; Tone is a tilt around 800 Hz, Drive is tanh with gain compensation (always soft-limits the loop) |
 | Output | Width, Duck, Dry/Wet, Output | Width pans alternate grains L/R; Duck ducks the wet by the input envelope |
 
-Display: right edge = now. Each active grain draws its read head (line 1 colour = reverse, line 2 =
-forward) with an arrow in its direction of travel; Onset mode shows a flash dot. Below it, the grain
-window from Smooth/Swell. Readouts: chunk time (or division · bpm), pattern · pitch, Frozen, wet meter.
+Display: right edge = now. Each active grain — or the tape head — draws its read position (line 1
+colour = reverse, line 2 = forward / fast-forward) with an arrow in its direction of travel; a stopped
+tape head is a square. The top line reads chunk time (or division · bpm) · pattern · pitch, with Frozen
+and the Onset flash dot on the right. Below: the grain window, or in Tape the catch-up level curve then
+the play curve.
+
+Layout: Time (Trigger over Division | Pre | Sens; bottom row Freeze | Time | Drift) · Direction ·
+Shape (display, then Smooth / Swell / Zip / Wow and the Engine switch) · Loop · Output. Every bottom-row
+knob sits on the same line.
 
 Every control is a native `live.*` widget (dial / tab / menu / text) and a Live parameter. The only
 jsui is the click-through background (`ignoreclick 1`) for sections, display and readouts.
 
 Push banks: **Chiasmus** (Time, Feedback, Cross, Pitch, Smooth, Swell, Dry/Wet, Freeze), **Motion**
-(Trigger, Division, Pre, Drift, Pattern, Flip, Fine, Sens), **Color** (Tone, Drive, Diffuse, Width, Duck, Output).
+(Trigger, Division, Pre, Drift, Pattern, Flip, Fine, Sens), **Tape** (Engine, Zip, Wow, Scatter, Tone,
+Drive, Diffuse), **Output** (Width, Duck, Output).
 
 ## Influences and differences
 
@@ -64,8 +92,10 @@ Original implementation; not an emulation of any of these.
 - Direction probability — Red Panda Particle 2 Rev mode; alternating repeats — Akihiko Matsumoto's
   Reverse Delay. Pattern + Flip generalise both.
 - Transient-triggered reverse — Rewind. Onset mode lands the reversed swell *after* the hit.
-  **True pre-verse (swell ending on the dry hit, à la United Plugins Mirror) is not implemented**: it
-  needs reported latency; left out of v1 on purpose.
+  **True pre-verse (swell ending on the dry hit, à la United Plugins Mirror) is not implemented** and
+  won't be while this is a pedal-style device: it needs reported latency.
+- Tape transport — Count to 5's variable-speed read head, tape-stop plugins. Here the stop/spin/restart
+  is a velocity-continuous Hermite path computed per chunk.
 - Freeze — Particle. Reverse into diffusion — Walrus Lore, EQD Avalanche Run.
 
 ## Limits / known gaps
@@ -85,4 +115,10 @@ Automated checks cover packaging/logic only; they do not replace listening in Li
 - Freeze render of `tests/chiasmus-test.wav` (default settings, 100 % wet), analysed with
   `tests/check_render.py`: peak 0.49, no NaN, DC ≈ 0; envelope is release-led (reversed) where the
   input is attack-led; tail decays −37 → −100 dB over 4 s after input stops.
-- **Not yet auditioned:** Sync, Onset, Cross > 0, Pitch ≠ 0, Freeze, Diffuse/Drive extremes, Width/Duck.
+- Tape engine (v2, same day): compiles clean; head display tracks catch-up (fast-forward) and reverse
+  play; realtime run in Live decays to silence after the input stops. Offline Python model of the tape
+  path (`Hermite catch-up + play`) keeps the head within 0.69 s of the write head at 400 ms.
+- Gotcha while testing: Freeze renders run from the start of the arrangement, so a clip that isn't at
+  bar 1 looks like the effect "resurrecting". Put the test clip at bar 1 before trusting a render.
+- Live sometimes keeps a stale copy of a rebuilt frozen device; delete and re-add it after a build.
+- **Not yet auditioned:** Sync, Onset, Scatter, Cross > 0, Pitch ≠ 0, Freeze, Wow, Diffuse/Drive extremes, Width/Duck.
