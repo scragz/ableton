@@ -1,0 +1,325 @@
+// Chiasmus - reverse delay as a small grain scheduler.
+// One stereo buffer holds input plus feedback. Grains read the most recent span backwards
+// (or forwards, per Pattern / Flip) with an equal-power trapezoid window skewed by Swell.
+// Cross morphs the feedback source: 0 = forward echo tap (every repeat reversed),
+// 1 = the grain output itself (each pass re-reverses: R, F, R, F ...).
+// Grain window: equal-power fades of fraction f, skewed by swell s (>0 swells in, <0 plucks out).
+// GenExpr functions must precede every declaration and statement.
+envelope(x, f, s) {
+    amp = 1;
+    if (x < f) amp = sin(0.5 * pi * x / f);
+    else if (x > 1 - f) amp = sin(0.5 * pi * (1 - x) / f);
+    if (s > 0) amp *= pow(x, 1 + s * 3);
+    else if (s < 0) amp *= pow(1 - x, 1 - s * 3);
+    return amp;
+}
+
+Buffer mem;
+Buffer view;
+Data voices(6, 8); // per voice: 0 age, 1 length, 2 start, 3 dir, 4 rate, 5 pan, 6 active, 7 unused
+Param trig(0, min=0, max=2);          // 0 free, 1 sync, 2 onset
+Param timems(400, min=20, max=4000);
+Param beats(1, min=0.125, max=8);
+Param prems(0, min=0, max=2000);
+Param drift(0, min=0, max=1);
+Param sens(0.5, min=0, max=1);
+Param pattern(0, min=0, max=2);       // 0 reverse, 1 alternate, 2 ABBA
+Param flip(0, min=0, max=1);
+Param pitch(0, min=-12.5, max=12.5);  // semitones incl. fine
+Param smooth(0.3, min=0, max=1);
+Param swell(0, min=-1, max=1);
+Param feedback(0.35, min=0, max=1);
+Param crossamt(0, min=0, max=1);
+Param tone(0, min=-1, max=1);
+Param drive(0, min=0, max=1);
+Param diffuse(0, min=0, max=1);
+Param width(0, min=0, max=1);
+Param duck(0, min=0, max=1);
+Param drywet(0.5, min=0, max=1);
+Param outdb(0, min=-24, max=12);
+Param freeze(0, min=0, max=1);
+
+History w(0);
+History countdown(0);
+History grainCount(0);
+History prevPhase(0);
+History beatCount(0);
+History beatSamples(24000);
+History stillFor(0);
+History lastTick(-1);
+History envF(0);
+History envS(0);
+History lockout(0);
+History pending(-1);
+History pendLen(0);
+History onsetFlash(0);
+History duckEnv(0);
+History echoDist(24000);
+History lpL(0);
+History lpR(0);
+History viewClock(0);
+History smMix(0.5);
+History smOut(1);
+History smFb(0.35);
+History smCross(0);
+History wetLevel(0);
+
+// Diffusion allpasses (4 per channel). Delays live at top level, as in the other devices.
+Delay apL1(16384);
+Delay apL2(16384);
+Delay apL3(16384);
+Delay apL4(16384);
+Delay apR1(16384);
+Delay apR2(16384);
+Delay apR3(16384);
+Delay apR4(16384);
+
+
+size = dim(mem);
+valid = size > 4096;
+sr = samplerate;
+dryL = in1;
+dryR = in2;
+
+// ---- timing ----
+fade = 0.01 + clamp(smooth, 0, 1) * 0.49;          // fade fraction of each grain (<= 0.5)
+rate = pow(2, clamp(pitch, -12.5, 12.5) / 12);
+pre = prems * sr * 0.001;
+
+// Host beat phase from plugphasor~; tempo from its slope, bar alignment not guaranteed.
+ph = in3;
+inc = wrap(ph - prevPhase, -0.5, 0.5);
+if (ph < prevPhase - 0.5) beatCount = (beatCount + 1) % 4096;
+prevPhase = ph;
+running = 0;
+if (inc > 0.0000001) {
+    beatSamples = clamp(1 / inc, sr * 0.1, sr * 4);
+    stillFor = 0;
+    running = 1;
+} else {
+    stillFor = min(stillFor + 1, sr);
+    running = stillFor < 2048;
+}
+
+period = timems * sr * 0.001;
+if (trig > 0.5 && trig < 1.5) period = beats * beatSamples;
+period = clamp(period, sr * 0.01, sr * 6);
+maxLen = max(64, (size * 0.92 - pre) / (1 + rate));
+
+launch = 0;
+launchLen = period / (1 - fade);
+launchPeriod = period;
+
+if (trig < 0.5) {
+    // Free: launch every period (drift randomises each chunk).
+    countdown -= 1;
+    if (countdown <= 0) {
+        dr = 1 + drift * noise() * 0.5;
+        launchPeriod = period * dr;
+        launchLen = launchPeriod / (1 - fade);
+        countdown = launchPeriod;
+        launch = 1;
+    }
+} else if (trig < 1.5) {
+    // Sync: launch on each grid tick of `beats`; fall back to a free clock when stopped.
+    if (running) {
+        pos = beatCount + ph;
+        tick = floor(pos / beats);
+        if (tick != lastTick) {
+            lastTick = tick;
+            launch = 1;
+        }
+        countdown = period;
+    } else {
+        countdown -= 1;
+        if (countdown <= 0) { countdown = period; launch = 1; }
+    }
+    launchLen = period * (1 + drift * noise() * 0.5) / (1 - fade);
+}
+
+// Onset detector on the input (used by Onset trigger; flash drawn by the panel).
+m = abs(in1 + in2) * 0.5;
+envF += (m > envF ? 1 - exp(-1 / (0.0008 * sr)) : 1 - exp(-1 / (0.03 * sr))) * (m - envF);
+envS += (m > envS ? 1 - exp(-1 / (0.06 * sr)) : 1 - exp(-1 / (0.5 * sr))) * (m - envS);
+lockout = max(lockout - 1, 0);
+onset = 0;
+if (lockout <= 0 && envF > envS * (1.4 + (1 - sens) * 4.6) + 0.000001 && envF > dbtoa(-60 + (1 - sens) * 36)) {
+    onset = 1;
+    lockout = max(sr * 0.06, period * 0.5);
+    onsetFlash = 1;
+}
+onsetFlash *= 0.9997;
+if (trig > 1.5) {
+    if (onset && pending < 0 && freeze < 0.5) {
+        pendLen = period * (1 + drift * noise() * 0.5) / (1 - fade);
+        pendLen = min(pendLen, maxLen);
+        // Launch once the chunk that starts 5 ms before the hit has been captured,
+        // so the reversed grain ends on the attack.
+        pending = rate * pendLen - sr * 0.005;
+    } else if (onset && pending < 0) {
+        pendLen = min(period / (1 - fade), maxLen);
+        pending = 0;
+    }
+    if (pending >= 0) {
+        pending -= 1;
+        if (pending < 0) { launch = 1; launchLen = pendLen; }
+    }
+}
+launchLen = clamp(launchLen, 64, maxLen);
+
+// ---- launch a grain ----
+if (launch && valid) {
+    n = grainCount;
+    dir = -1;
+    if (pattern > 0.5 && pattern < 1.5) dir = (n % 2 < 0.5) ? -1 : 1;
+    else if (pattern > 1.5) { k = n % 4; dir = (k < 0.5 || k > 2.5) ? -1 : 1; }
+    if (noise() * 0.5 + 0.5 < flip) dir = -dir;
+    span = rate * launchLen;
+    start = w - pre - 1;
+    if (dir > 0) start = w - pre - 1 - span;
+    pan = ((n % 2 < 0.5) ? -1 : 1) * width;
+    // Take a free voice, else steal the one nearest its end.
+    slot = 0;
+    best = -1;
+    for (v = 0; v < 6; v += 1) {
+        a = peek(voices, v, 6);
+        score = a > 0.5 ? peek(voices, v, 0) / max(peek(voices, v, 1), 1) : 2;
+        if (score > best) { best = score; slot = v; }
+    }
+    poke(voices, 0, slot, 0);
+    poke(voices, launchLen, slot, 1);
+    poke(voices, start, slot, 2);
+    poke(voices, dir, slot, 3);
+    poke(voices, rate, slot, 4);
+    poke(voices, pan, slot, 5);
+    poke(voices, 1, slot, 6);
+    grainCount = (grainCount + 1) % 65536;
+}
+
+// ---- render grains ----
+wetL = 0;
+wetR = 0;
+drawNow = viewClock <= 0;
+dispW = pre + (period / (1 - fade)) * (1 + rate) + 1;
+viewClock = drawNow ? 256 : viewClock - 1;
+for (v = 0; v < 6; v += 1) {
+    act = peek(voices, v, 6);
+    amp = 0;
+    xx = 0;
+    dist = 0;
+    dv = 0;
+    if (act > 0.5 && valid) {
+        age = peek(voices, v, 0);
+        len = max(peek(voices, v, 1), 1);
+        st = peek(voices, v, 2);
+        dv = peek(voices, v, 3);
+        rt = peek(voices, v, 4);
+        pn = peek(voices, v, 5);
+        xx = age / len;
+        f = max(fade, min(96 / len, 0.5));
+        amp = envelope(xx, f, swell);
+        p = wrap(st + dv * rt * age, 0, size);
+        l = sample(mem, p, 0, index="samples", interp="cubic", boundmode="wrap");
+        r = sample(mem, p, 1, index="samples", interp="cubic", boundmode="wrap");
+        mm = (l + r) * 0.5;
+        ap = abs(pn);
+        l = mix(l, mm * (1 - pn), ap);
+        r = mix(r, mm * (1 + pn), ap);
+        wetL += l * amp;
+        wetR += r * amp;
+        dist = w - p;
+        age += 1;
+        poke(voices, age, v, 0);
+        if (age >= len) poke(voices, 0, v, 6);
+    }
+    if (drawNow) {
+        poke(view, amp, v * 4, 0);
+        poke(view, xx, v * 4 + 1, 0);
+        poke(view, dv, v * 4 + 2, 0);
+        poke(view, clamp(wrap(dist, 0, size) / dispW, 0, 1), v * 4 + 3, 0);
+    }
+}
+
+// ---- diffusion (in the wet path, so it also smears the Cross feedback) ----
+g = 0.72 * diffuse;
+msr = samplerate * 0.001;
+aL = wetL;
+aR = wetR;
+vd = apL1.read(4.77 * msr);
+ud = aL + g * vd;
+apL1.write(ud);
+aL = vd - g * ud;
+vd = apL2.read(3.59 * msr);
+ud = aL + g * vd;
+apL2.write(ud);
+aL = vd - g * ud;
+vd = apL3.read(12.73 * msr);
+ud = aL + g * vd;
+apL3.write(ud);
+aL = vd - g * ud;
+vd = apL4.read(9.31 * msr);
+ud = aL + g * vd;
+apL4.write(ud);
+aL = vd - g * ud;
+vd = apR1.read(5.21 * msr);
+ud = aR + g * vd;
+apR1.write(ud);
+aR = vd - g * ud;
+vd = apR2.read(3.97 * msr);
+ud = aR + g * vd;
+apR2.write(ud);
+aR = vd - g * ud;
+vd = apR3.read(11.87 * msr);
+ud = aR + g * vd;
+apR3.write(ud);
+aR = vd - g * ud;
+vd = apR4.read(8.63 * msr);
+ud = aR + g * vd;
+apR4.write(ud);
+aR = vd - g * ud;
+wetL = mix(wetL, aL, diffuse);
+wetR = mix(wetR, aR, diffuse);
+
+// ---- feedback ----
+echoDist = mix(echoDist, clamp(period + pre, 64, size * 0.95), 0.0005);
+eL = valid ? sample(mem, wrap(w - echoDist, 0, size), 0, index="samples", interp="linear", boundmode="wrap") : 0;
+eR = valid ? sample(mem, wrap(w - echoDist, 0, size), 1, index="samples", interp="linear", boundmode="wrap") : 0;
+smCross = mix(smCross, crossamt, 0.001);
+smFb = mix(smFb, feedback, 0.001);
+fL = mix(eL, wetL, smCross);
+fR = mix(eR, wetR, smCross);
+c = 1 - exp(-twopi * 800 / sr);
+lpL += c * (fL - lpL);
+lpR += c * (fR - lpR);
+tl = tone < 0 ? 1 : 1 - tone;
+th = tone < 0 ? 1 + tone : 1;
+fL = lpL * tl + (fL - lpL) * th;
+fR = lpR * tl + (fR - lpR) * th;
+gd = 1 + drive * 8;
+fL = dcblock(tanh(fL * smFb * gd) / sqrt(gd));
+fR = dcblock(tanh(fR * smFb * gd) / sqrt(gd));
+
+if (valid && freeze < 0.5) {
+    wi = wrap(w, 0, size);
+    poke(mem, fixdenorm(in1 + fL), wi, 0);
+    poke(mem, fixdenorm(in2 + fR), wi, 1);
+    w = wrap(w + 1, 0, size);
+}
+
+// ---- output ----
+duckEnv += (m > duckEnv ? 1 - exp(-1 / (0.005 * sr)) : 1 - exp(-1 / (0.25 * sr))) * (m - duckEnv);
+dg = 1 / (1 + duck * duckEnv * 12);
+smMix = mix(smMix, drywet, 0.001);
+smOut = mix(smOut, dbtoa(outdb), 0.001);
+wg = sin(smMix * halfpi) * dg;
+dgn = cos(smMix * halfpi);
+wetLevel = max(abs(wetL), wetLevel * 0.9995);
+if (drawNow) {
+    poke(view, onsetFlash, 24, 0);
+    poke(view, beatSamples / sr, 25, 0);
+    poke(view, running, 26, 0);
+    poke(view, wetLevel, 27, 0);
+    poke(view, freeze, 28, 0);
+}
+out1 = fixdenorm((dryL * dgn + wetL * wg) * smOut);
+out2 = fixdenorm((dryR * dgn + wetR * wg) * smOut);
