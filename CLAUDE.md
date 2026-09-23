@@ -7,6 +7,7 @@ This folder is a workspace, not a repo. Each subfolder is its **own git repo**
 
 | Folder | Device | Type | Build | Reference / inspiration |
 | --- | --- | --- | --- | --- |
+| `chiasmus/` | Chiasmus | Audio effect: reverse delay as a 6-voice grain scheduler; Free/Sync/Onset triggers, Rev/Alt/ABBA patterns, Cross morphs feedback between forward echo and re-reversing loop | `python3 scripts/build.py` | Survey of reverse delays; see README "Influences and differences" |
 | `fluxion/` | Fluxion | MIDI effect: 16-step rhythm channel, curve editor, Main/Aux1/Aux2 note lanes. Every value is a Live parameter (309), per-step values banked 16x so modulators can map them | `node scripts/build.mjs` | Flux manual (`docs/flux-user-manual.pdf`) |
 | `hypna/` | Hypna | Instrument: 5-voice prime-ratio drone, wavetables, reverb | `python3 scripts/build.py` | Drone module; see README "Differences from the reference" |
 | `materia/` | Materia | Audio effect: pool of 8-bit Leibniz-style bus modules, free routing | `python3 scripts/build.py` | Xaoc Leibniz; spec in `docs/spec.md` (v0.2) |
@@ -27,6 +28,11 @@ several scripts use CWD-relative paths.
   generator and rebuild.
 - **DSP** is GenExpr (`src/*.genexpr`, or Python-generated: `materia/scripts/dsp.py`,
   `vril/src/engine.py`) embedded in a `gen~` codebox.
+  GenExpr gotchas (hit in chiasmus): function definitions must precede every declaration and
+  statement; declare `Delay` at top level; `peek` has no `interp` -- use
+  `sample(buf, i, ch, index="samples", interp="cubic")`. A codebox compile error shows only as a
+  blank `codebox` line in Live; open `scripts/build/<Name>.maxpat` in Live's bundled Max
+  (`Ableton Live 12 Suite.app/Contents/App-Resources/Max/Max.app`) to read the message.
 - **Control** is Max JS (`js`, or `v8` in materia and vril) handling MIDI, state, and UI
   logic. **Panels** are `jsui` scripts for things Live has no widget for. Where a
   device's face is mostly custom (fluxion), the jsui is *background chrome only* —
@@ -93,6 +99,7 @@ several scripts use CWD-relative paths.
 Automated checks only cover logic/packaging — they never substitute for loading the
 device in Live. Say so explicitly when reporting results.
 
+- chiasmus: `python3 tests/check_render.py tests/chiasmus-test.wav <freeze render>` (render made in Live; see README)
 - fluxion: `node --test src/multicurve.test.mjs src/mods.test.mjs src/face.test.mjs` (mods and face read `device/Fluxion.maxpat`, so build first)
 - hypna: `node --test tests/*.test.cjs`, `python3 tests/structure.py` (tests reference `device/` loose files — may need the staging paths)
 - materia: `python3 scripts/test_defaults.py`, `node scripts/test_reference.cjs`, `node scripts/test_routing.cjs` (need a build first — read `scripts/build/schema.json`)
