@@ -7,7 +7,7 @@ This folder is a workspace, not a repo. Each subfolder is its **own git repo**
 
 | Folder | Device | Type | Build | Reference / inspiration |
 | --- | --- | --- | --- | --- |
-| `fluxion/` | Fluxion | MIDI effect: 16-step rhythm channel, curve editor, Main/Aux1/Aux2 note lanes | `node scripts/build.mjs` | Flux manual (`docs/flux-user-manual.pdf`) |
+| `fluxion/` | Fluxion | MIDI effect: 16-step rhythm channel, curve editor, Main/Aux1/Aux2 note lanes. Every value is a Live parameter (309), per-step values banked 16x so modulators can map them | `node scripts/build.mjs` | Flux manual (`docs/flux-user-manual.pdf`) |
 | `hypna/` | Hypna | Instrument: 5-voice prime-ratio drone, wavetables, reverb | `python3 scripts/build.py` | Drone module; see README "Differences from the reference" |
 | `materia/` | Materia | Audio effect: pool of 8-bit Leibniz-style bus modules, free routing | `python3 scripts/build.py` | Xaoc Leibniz; spec in `docs/spec.md` (v0.2) |
 | `soma/` | Soma | Instrument: three-oscillator PM/FM network + low-pass gate | `python3 scripts/build.py` | Three Body + Natural Gate manuals; `docs/instrument-design.md` |
@@ -28,7 +28,35 @@ several scripts use CWD-relative paths.
 - **DSP** is GenExpr (`src/*.genexpr`, or Python-generated: `materia/scripts/dsp.py`,
   `vril/src/engine.py`) embedded in a `gen~` codebox.
 - **Control** is Max JS (`js`, or `v8` in materia and vril) handling MIDI, state, and UI
-  logic. **Panels** are `jsui` scripts for things Live has no widget for.
+  logic. **Panels** are `jsui` scripts for things Live has no widget for. Where a
+  device's face is mostly custom (fluxion), the jsui is *background chrome only* —
+  sections, fieldset frames and row labels — with native `live.*` widgets laid over
+  it in presentation and a control script marshalling them against the state. Page
+  switching hides and shows widget sets with
+  `this.patcher.getnamed(name).message('hidden', 0|1)` (materia's `tab()` is the
+  reference); `ignoreclick` disables one without hiding it.
+- **A full-face `jsui` must be `ignoreclick 1, background 1`.** Otherwise it covers
+  every native widget and eats their clicks, and the device looks fine but is dead
+  to the mouse. Controls that genuinely need the mouse get a small transparent
+  catcher jsui over their own rectangle, placed where no widget sits, forwarding
+  coordinates to the face script (fluxion's `fluxion-hit.js`). A catcher that
+  overlaps another page's widgets must join that page's hide/show roster.
+- **A `live.*` widget that shows a value must be a parameter.** `live.numbox`,
+  `live.menu`, `live.dial` and a toggling `live.text` render blank and refuse input
+  with `parameter_enable 0` — the parameter *is* the value. Parameter mode off is
+  only for widgets carrying no value (background `jsui`, momentary `live.text`,
+  `umenu`). To give a control Live's look and ranges without putting it in the
+  automation list, define the parameter and set `parameter_invisible 1` (Stored
+  Only). Anything stored is then restored by Live in an undefined order against a
+  `pattr` blob, so a device should pick one: either the blob owns the values, or
+  the parameters do. Fluxion went all-parameter and deleted its blob.
+- **To make a per-step value mappable, it needs its own parameter AND a visible
+  widget.** Live's modulators map by clicking a control, so a parameter with no
+  widget on screen is unreachable. Bank them: one full parameter set per step,
+  `hidden` on all but the selected bank (fluxion, 16 x 17). The cost is a long
+  automation list and an "apply to all steps" control that spends one undo step per
+  bank -- Ableton's production guidelines warn that internally-driven parameters can
+  render Live's undo useless.
 - **Parameters** are defined in Python (`param()` / `schema.py` / `parameters.py`) and
   emitted as native `live.*` objects with `saved_attribute_attributes.valueof`.
 - **Staging:** `scripts/build/` holds the unfrozen editable patch + loose deps (open
@@ -65,7 +93,7 @@ several scripts use CWD-relative paths.
 Automated checks only cover logic/packaging — they never substitute for loading the
 device in Live. Say so explicitly when reporting results.
 
-- fluxion: `node --test src/multicurve.test.mjs`
+- fluxion: `node --test src/multicurve.test.mjs src/mods.test.mjs src/face.test.mjs` (mods and face read `device/Fluxion.maxpat`, so build first)
 - hypna: `node --test tests/*.test.cjs`, `python3 tests/structure.py` (tests reference `device/` loose files — may need the staging paths)
 - materia: `python3 scripts/test_defaults.py`, `node scripts/test_reference.cjs`, `node scripts/test_routing.cjs` (need a build first — read `scripts/build/schema.json`)
 - syzygy: `node tests/control2.test.cjs` (v2); `control.test.cjs` targets v1 source
@@ -87,6 +115,10 @@ drives a running Max instance. Vril's native verification is still pending.
   timestamps/randomness without reason).
 - Parameters Live should automate are native `live.*` objects; state not suited to
   parameters goes in a `pattr` (Fluxion stores its whole pattern as a Blob).
+  Where a device has both, keep them one-way: parameters are applied to a copy at
+  use time and never written back into the blob, because Live restores blob and
+  parameter values in an unspecified order and anything writing both will race on
+  set load. Fluxion's Mod page is the reference for this.
 - Keep DSP bounded: smoothing, DC blocking, soft limiting, mute above ~0.45·SR rather than alias.
 - When adding a device: own git repo, `src/ scripts/ device/ docs/` layout, shared
   `.gitignore` (ignores `device/`), device-prefixed JS names, theme via `theme/`, and

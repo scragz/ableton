@@ -38,14 +38,41 @@ const context = vm.createContext({ mgraphics, outlet() {}, notifyclients() {},
   arrayfromargs: args => Array.from(args), error: message => { throw new Error(message); } });
 context.include = file => vm.runInContext(fs.readFileSync(new URL(file, here), 'utf8'), context);
 context.include('fluxion-ui.js');
-context.state.steps[0].curve = 2.4;
-context.state.steps[0].density = 32;
-context.state.steps[0].divisions = 4;
-context.state.steps[0].curveVariant = 4;
-context.state.loopEnd = 3;
+// The face draws from a mirror now; hand it a representative one.
+const page = Number(process.env.PREVIEW_PAGE || 0);
+context.mirror(JSON.stringify({
+  selected: 0, page, loopStart: 0, loopEnd: 3, label: '4.4 Call / response',
+  enabled: Array.from({length: 16}, (_, i) => i !== 6),
+  step: {...context.DEFAULT_STEP, curve: 2.4, density: 32, divisions: 4, curveVariant: 4, enabled: true},
+}));
 context.paint();
+// The values on the face are native live.* widgets, not jsui drawing, so they are
+// invisible to the mock above. Sketch them from the generated patch: this shows
+// where Live will put them and whether anything collides, not how Live draws them.
+const patch = JSON.parse(fs.readFileSync(new URL('../device/Fluxion.maxpat', here), 'utf8')).patcher;
+const boxes = patch.boxes.map(b => b.box);
+// Sketch whichever parameters would be on screen: bank 0 plus the globals, or the
+// mod page. Placement only -- this is not how Live draws them.
+const rows = boxes.find(b => b.id === 'facemsg').text.split(',').map(s => s.trim().split(/\s+/));
+const bank0 = rows.find(r => r[0] === 'roster' && r[1] === '0').slice(2);
+const mod = rows.find(r => r[0] === 'modpage').slice(1);
+const onPage = new Set(page ? mod : bank0);
+for (const box of boxes.filter(b => String(b.maxclass).startsWith('live.'))) {
+  if (box.presentation !== 1) continue;
+  const banked = /^(s\d+_|g_|m\d_)/.test(box.id);
+  if (banked && !onPage.has(box.id)) continue;
+  const [bx, by, bw, bh] = box.presentation_rect;
+  const menu = box.maxclass === 'live.menu';
+  const label = box.maxclass === 'live.text' ? box.text
+    : menu ? (box.items || box.saved_attribute_attributes?.valueof?.parameter_enum || ['\u2014'])[0] + ' \u25be'
+    : String(box.saved_attribute_attributes?.valueof?.parameter_initial?.[0] ?? 0);
+  if (box.maxclass === 'live.text' && page && !onPage.has(box.id) && /^(s\d+_)/.test(box.id)) continue;
+  elements.push(`<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="2" fill="rgb(67,67,67)"/>`);
+  elements.push(`<text x="${bx + bw / 2}" y="${by + bh / 2 + 3.2}" fill="rgb(217,217,217)" font-family="Arial" font-size="9" text-anchor="middle">${escape(label)}</text>`);
+}
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="169" viewBox="0 0 1100 169">${elements.join('')}</svg>`;
 const out = new URL('../device/', here); // next to the device, where the committed previews live
-fs.writeFileSync(new URL('editor-preview.svg', out), svg);
-await sharp(Buffer.from(svg)).resize(2200, 338).png().toFile(new URL('editor-preview.png', out).pathname);
-console.log('Rendered actual jsui paint commands to device/editor-preview.svg / .png.');
+const name = page ? 'editor-preview-mod' : 'editor-preview';
+fs.writeFileSync(new URL(name + '.svg', out), svg);
+await sharp(Buffer.from(svg)).resize(2200, 338).png().toFile(new URL(name + '.png', out).pathname);
+console.log(`Rendered actual jsui paint commands to device/${name}.svg / .png.`);

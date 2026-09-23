@@ -7,6 +7,7 @@ include("fluxion-rhythm.js");
 include("fluxion-state.js");
 
 var state = freshState();
+var mods = freshMods();
 var cache = {};
 var lastBeat = null;
 var lastTempo = 120;
@@ -18,13 +19,76 @@ var lastDisplay = "";
 var LOOKAHEAD_MS = 80;
 var EPSILON = 0.00000001;
 
-function configure(json) {
-    try {
-        var next = normalizeState(JSON.parse(json));
-        state = next;
+// Every value is a Live parameter now, so state is assembled from parameter
+// messages rather than recalled from a blob.
+var STEP_KEYS = {density: "density", length: "length", curve: "curve",
+    differential: "differential", phase: "phase", compress: "compress",
+    humanize: "humanize", gate: "gate", probability: "probability",
+    maskcount: "maskCount", mask: "mask", maskshift: "maskShift"};
+
+function step(index, key, value) {
+    var i = Math.round(Number(index)), name = String(key), v = Number(value);
+    if (!(i >= 0 && i < 16) || !isFinite(v)) return;
+    var s = state.steps[i];
+    if (STEP_KEYS[name] !== undefined) s[STEP_KEYS[name]] = clampField(fieldSpec(STEP_KEYS[name]), v);
+    else if (name === "curvemode") {
+        var mode = CURVE_MODES[Math.round(bounded(v, 0, CURVE_MODES.length - 1, 0))];
+        s.divisions = mode.divisions;
+        s.curveVariant = mode.variant;
+    } else if (name === "probmode") s.probabilityMode = Math.round(v) ? "Step" : "Trigger";
+    else if (name === "aux1" || name === "aux2") s[name] = AUX_MODES[Math.round(bounded(v, 0, AUX_MODES.length - 1, 0))];
+    else if (name === "enabled") s.enabled = !Math.round(v);
+    else return;
+    invalidate(i);
+}
+
+// Drop that step's plan but cancel nothing already in the pipe: values are sampled
+// when a step is next planned, so a modulator moving at control rate lands on the
+// following step edge instead of thrashing the scheduler and dropping notes.
+function invalidate(index) {
+    for (var k in cache) if (Number(k.split(":")[1]) === index) delete cache[k];
+}
+
+function set(key, a, b) {
+    var name = String(key), lane;
+    if (name === "loopstart" || name === "loopend") {
+        state[name === "loopstart" ? "loopStart" : "loopEnd"] = Math.round(bounded(a, 1, 16, 1)) - 1;
+        if (state.loopStart > state.loopEnd) {
+            if (name === "loopstart") state.loopEnd = state.loopStart;
+            else state.loopStart = state.loopEnd;
+        }
         cache = {};
-        cancel();
-    } catch (e) { error("Fluxion: " + e.message + "\n"); }
+    } else if (name === "input") state.input = INPUT_MODES[Math.round(bounded(a, 0, INPUT_MODES.length - 1, 0))];
+    else if (name === "mute") { state.muted = !!Math.round(Number(a)); if (state.muted) panic(); }
+    else if (name === "panic") { if (Math.round(Number(a))) { state.muted = true; panic(); } }
+    else if (name === "selected") state.selected = Math.round(bounded(a, 1, 16, 1)) - 1;
+    else if (name === "ch" || name === "note" || name === "vel") {
+        lane = Math.round(Number(a));
+        if (!(lane >= 0 && lane < 3)) return;
+        var column = name === "ch" ? "channels" : name === "note" ? "notes" : "velocities";
+        state[column][lane] = Math.round(bounded(b, name === "note" ? 0 : 1, name === "ch" ? 16 : 127,
+            state[column][lane]));
+        cache = {};
+    }
+}
+
+// Modulation is sampled when a step is next planned, so it never cancels the pipe.
+// Changing a slot's target or step is configuration rather than modulation, so it
+// drops the whole plan cache (but still cancels nothing already scheduled).
+function gmod(key, value) {
+    var name = String(key), next = Number(value);
+    if (mods.globals[name] === undefined || !isFinite(next)) return;
+    mods.globals[name] = next;
+}
+
+function mslot(index, field, value) {
+    var i = Math.round(Number(index)), name = String(field), next = Number(value);
+    if (!(i >= 0 && i < MOD_SLOTS) || !isFinite(next)) return;
+    if (name === "amount") { mods.slots[i].amount = next; return; }
+    if (name !== "target" && name !== "step") return;
+    if (mods.slots[i][name] === Math.round(next)) return;
+    mods.slots[i][name] = Math.round(next);
+    cache = {};
 }
 
 function cancel() {
@@ -64,7 +128,7 @@ function locate(beat) {
 function eventsFor(block) {
     var key = block.cycle + ":" + block.step;
     if (cache[key]) return cache[key];
-    var s = state.steps[block.step];
+    var s = applyMods(state.steps[block.step], mods, block.step);
     var hits = s.enabled ? generateHits(s, seedFor(0, block.step, block.cycle), block.start * 4) : [];
     var events = [];
     for (var lane = 0; lane < 3; lane++) {

@@ -6,7 +6,7 @@ and Main / Aux 1 / Aux 2 note streams. No player grid, samples, audio, CV, or VC
 ## Load the device
 
 1. Run `node scripts/build.mjs`. It writes a **frozen** `device/fluxion.amxd`
-   with the five runtime scripts from `src/` embedded; distribute that one file.
+   with the eight runtime scripts from `src/` embedded; distribute that one file.
 2. Drag **device/fluxion.amxd** onto a MIDI track in Ableton Live with Max for Live.
 3. Start Live's transport. The default is one repeating four-beat step, with
    Main on channel 1 / note 36. Aux 1 (channel 2 / note 43) and Aux 2
@@ -14,8 +14,9 @@ and Main / Aux 1 / Aux 2 note streams. No player grid, samples, audio, CV, or VC
 4. Extend **Loop last** to include more steps. Edit steps independently of playback.
 
 The build freezes the device itself, writing the same container layout as Live's
-frozen factory devices (patch plus `fluxion-ui.js`, `fluxion-engine.js`,
-`fluxion-voice.js`, `fluxion-rhythm.js`, `fluxion-state.js`). The layout is not
+frozen factory devices (patch plus `fluxion-ui.js`, `fluxion-theme.js`,
+`fluxion-control.js`, `fluxion-hit.js`, `fluxion-engine.js`, `fluxion-voice.js`, `fluxion-rhythm.js`,
+`fluxion-state.js`). The layout is not
 documented by Ableton; if Live rejects a build, open `device/fluxion.maxpat` with
 `src/` on Max's search path and use **Freeze Device** manually. Test and preview
 files in `src/` are never embedded.
@@ -32,6 +33,49 @@ so Max can locate the scripts. Enable **Open in Presentation**, with device widt
 The JSON describes Max objects and wiring; it does not contain the five JavaScript
 dependencies. Pasting JSON alone without these files will not produce a working editor.
 
+## The face
+
+Every value in this device is a **real Live parameter** — 309 of them — so all but
+four are automatable and mappable by Live's own modulators, by Max for Live LFOs,
+by macros and by MIDI.
+
+Per-step values are **banked**. Each of the 16 steps owns a complete set of
+parameters (`Step 7 Mask Shift`, `Step 12 Gate`, …) and only the selected bank is
+on screen. Banking is what makes them mappable at all: Live's modulators map by
+clicking a control, so a parameter with no visible widget cannot be reached. To map
+an LFO to one step's Mask Shift, select that step, hit Map, click the field. The
+mapping stays on that step, because every bank is a distinct parameter.
+
+Only four things are Stored Only — kept in the set, kept out of the automation
+list: **All**, **Mod**, **Panic**, and the selected step. They are interface state,
+not sound.
+
+There is **no `pattr` blob** any more. Live stores parameters, so the parameter set
+*is* the device state. That also retires the blob-versus-parameter recall race the
+earlier builds had to guard with a load gate.
+
+`fluxion-control.js` owns no values. It decides which bank is visible, copies an
+edit across banks when ALL is on, and sends the face the little it needs to draw.
+`fluxion-engine.js` assembles its 16-step state from `step <bank> <key> <value>`
+messages and schedules from that. The face jsui is `ignoreclick 1, background 1`
+background art — without both flags it covers the widgets and swallows every click
+— and the two controls that still need the mouse (the step row, the curve graph)
+get transparent `fluxion-hit.js` catchers over regions no widget occupies.
+
+### Three consequences worth knowing
+
+**Modulation lands on the next step edge.** A parameter move updates that step's
+plan but cancels nothing already scheduled, so an LFO at control rate cannot thrash
+the scheduler or drop notes. Hand edits behave the same way: they take effect the
+next time that step is planned, at most 80 ms later.
+
+**ALL is expensive in undo.** Copying one edit across 16 banks is 16 real parameter
+writes, so Live's undo history fills quickly. Ableton's own production guidelines
+warn about exactly this. Leave ALL off unless you are using it.
+
+**Lane channels are no longer forced distinct.** Each is an independent parameter,
+so two lanes can share a channel if you set them that way.
+
 ## Editing
 
 - **1–16:** select the step to edit. The amber underline indicates playback and
@@ -44,30 +88,82 @@ dependencies. Pasting JSON alone without these files will not produce a working 
   bend pattern. Click either half or drag to browse; double-click returns to `1`.
   Curve sets the overall strength and sign; the graph shows the selected pattern
   and subdivision boundaries. ALL applies both division count and variation.
-- **Values:** drag up/down; Shift-drag for fine adjustments. Click the left half
-  to decrement or the right half to increment. Double-click rhythm fields to reset.
+- **Values:** stock Live numboxes — drag, Shift-drag for fine adjustment, or click
+  and type. Live enforces each field's range.
 - **ALL:** apply subsequent step-parameter changes to all 16 steps, including
   steps outside the loop. It does not copy the current step when enabled.
-- **STEP ON/OFF:** mute the selected step's three outputs while preserving its length.
-- **Aux modes:** drag or use the two halves to move through the modes; double-click
-  switches the aux off. Probability toggles between **Trigger** and **Step**.
+- **STEP OFF:** mute the selected step's three outputs while preserving its length.
+- **Aux modes:** a menu per aux lane. Probability picks **Trigger** or **Step**.
 - **Channel / Note / Velocity:** configure each output. Choosing an occupied channel
   swaps the assignments, keeping all three channels distinct.
-- **Note in:** where pitch and velocity come from. Click to cycle:
+- **Note in:** where pitch and velocity come from:
   - **OFF** — each lane's Note / Velocity settings (original behavior).
   - **LATCH** — put a MIDI sequencer (or clip) before Fluxion. Every gate plays the
     most recent incoming note at its velocity; the note keeps playing after the
     sequencer releases it. Silent until the first input note arrives.
   - **HOLD** — gates fire only while input notes are held (last-note priority).
-  In LATCH/HOLD the Note and Velocity cells show **IN**; channels still apply.
+  In LATCH/HOLD the Note and Velocity cells go inert; channels still apply.
   Fluxion decides *when* gates fire and how long they last; the sequencer decides
   *what* plays. Input gate lengths are ignored, and input MIDI is not passed through.
 - **MUTE:** release held notes and stop generating. Unmute resumes at Live's position.
 - **PANIC:** clear pending notes, release held notes, and engage MUTE. Unmute to resume.
 
-All 16 steps, loop limits, routing, mute, selected step, and ALL are stored as a
-`pattr` Blob parameter for Live set/device recall. This initial version does not
-expose individual controls as Live automation parameters. Playback position is not saved.
+All 16 steps, loop limits, routing, mute, selected step, page, and ALL are stored
+as a `pattr` Blob parameter for Live set/device recall. Playback position is not
+saved. Per-step values are not themselves Live parameters; the Mod page below is
+how they are automated and modulated.
+
+## Modulation (Mod page)
+
+**Mod** (top right) swaps the lower row for the modulation page; the step row and
+the top strip stay put. The control script shows and hides the two widget sets, the
+same way Materia switches its tabs.
+
+Everything on the mod page is a real Live parameter and a native widget:
+automatable, MIDI/macro-mappable, right-clickable, and a target for Max for Live
+modulators and Live's own modulation.
+
+### Global Offsets
+
+Eight parameters that ride on top of every step's stored value. Density,
+Curve, Diff, Phase, Compress, Humanize and Chance are offsets in the field's own
+units and are neutral at 0; Gate is a percentage of the stored gate and is neutral
+at 100%. Results are clamped to each field's normal range, so a global offset can
+never push a step somewhere the editor could not.
+
+### Mod Slots
+
+Four assignable slots, each **Target / Step / Amount**:
+
+- **Target** — any step field except Length. Off disables the slot.
+- **Step** — `All`, or a single step 1–16.
+- **Amount** — a percentage of the target field's full range, so one control
+  behaves sensibly whatever it is pointed at. +100% on Curve is the full +5.
+
+Length is deliberately not a target. The engine derives loop geometry from the
+stored step lengths, so modulating length would desync planning from playback
+position.
+
+### What modulation does *not* touch
+
+Parameters are applied to a **copy** of the step at plan time and are never written
+back into the `pattr` blob. The blob is always the pattern; the parameters are
+always modifiers on top of it. That is deliberate: Live restores blob and parameter
+values in an unspecified order, and anything that wrote both would race on set load.
+It also means a modulated or automated value never marks the set dirty, and
+double-clicking a Mod field returns it to neutral without touching the sequence.
+
+### When modulation is sampled
+
+Values are sampled **once per step, when that step is first planned** — at most
+`LOOKAHEAD_MS` (80 ms) before it sounds. Continuous modulation therefore never
+cancels the pipe or replans notes already emitted; it lands on the next step edge.
+Modulating at audio-ish rates will not produce smooth sweeps, and is not meant to:
+the result is stepped, like a hardware sequencer sampling a CV at each gate.
+
+Changing a slot's **Target** or **Step** is a configuration change rather than
+modulation, so it drops the plan cache (but not the pipe) and takes effect at the
+next unplanned step. Editing the pattern itself still cancels and replans as before.
 
 ## Transport behavior
 
@@ -183,14 +279,24 @@ uses sharp from the Fluxion web app, expected at `../../fluxion` (override with
 `FLUXION_APP=/path/to/fluxion`).
 
 ```sh
-node build.mjs
-node --test multicurve.test.mjs
-node preview.mjs
+node scripts/build.mjs
+node --test src/multicurve.test.mjs src/mods.test.mjs src/face.test.mjs
+node src/preview.mjs
 ```
 
 The local multi-curve suite checks all 43 modes, musical direction/strength,
 monotonic timing and subgrid boundaries, legacy recall, selector gestures, ALL,
-reset, MIDI event generation, and cancellation on edits.
+reset, MIDI event generation, and cancellation on edits. `mods.test.mjs` covers the
+modulation layer: neutral no-ops, offset/scale arithmetic and clamping, slot
+percentage scaling and accumulation, per-step scoping, the Length exclusion, curve
+variant reclamping, Mod page hit regions, and the generated patch's parameter
+integrity (unique Long Names, short names that fit the automation lane, a
+`parameters` entry per object, and a patch cord from every parameter to the
+engine). `face.test.mjs` drives the real widget-to-state chain through both
+scripts: every widget's edit mapping, clamping on the round trip, ALL, channel
+swapping, menu symbols, selection repaint without an engine replan, page
+show/hide, the LATCH/HOLD inert cells, and blob recall. It also checks the
+generated face for stray widgets, page roster coverage and rectangle overlaps.
 Native Max inspection timed out during this change; the new selector and curve
 behavior still require in-host validation.
 
@@ -202,16 +308,36 @@ continuous playback without missing/duplicate events, unequal step lengths,
 forward/backward seeks, loop wraps, mid-step restart, tempo changes, cancellation,
 editor interactions, state serialization, and AMXD/patch dependency integrity.
 
-`editor-preview.png` is rendered from the actual jsui drawing commands with a
-test renderer. It is a source-level layout preview, **not a screenshot from Max**.
+`editor-preview.png` and `editor-preview-mod.png` are rendered from the actual jsui
+drawing commands with a test renderer; the native widgets are sketched from the
+generated patch's presentation rectangles, so they show placement, not how Live
+draws them. Source-level layout previews, **not screenshots from Max**.
 The tests execute the actual JavaScript in a Max API harness; they do not prove
 Ableton integration or replace a native MIDI timing/recording check.
 
+None of this proves the device works in Live. An earlier build of the native face
+shipped its widgets with parameter mode off and they loaded blank and inert, which
+only showed up in the host. Treat everything here as unverified until it is: the widget attribute values, `hidden` and
+`ignoreclick` behaviour on `live.*` objects inside a frozen device, the parameter
+ranges and units, automation and mapping, and step-boundary sampling under a real
+modulator are all unverified.
+
 In Live, verify these remaining integration checks:
 
-1. Load with no Max Console errors and inspect the compact editor.
+1. Load with no Max Console errors and inspect the compact editor. Check that every
+   value reads as a stock Live control, that the Mod button swaps the lower row
+   cleanly, and that nothing from the hidden page is still drawing.
 2. Play, stop, jump forward/backward, and loop an odd-length region with unequal
    device step lengths. Check that the playhead and emitted notes agree.
 3. Monitor raw MIDI after `midiflush`, including stop/panic note-offs on all channels.
 4. Save and reopen a set with distinct values in all 16 steps; verify routing/state.
 5. Freeze and reload the device, then verify your intended downstream routing.
+6. Confirm all 20 modulation parameters appear in the automation lane with sane
+   ranges and units, that hand edits on the Mod page record automation, and that a
+   Max for Live LFO on a Global offset produces stepped changes at step edges
+   without dropping or retriggering notes.
+7. Save a set with non-neutral modulation, reopen it, and confirm the pattern and
+   the parameters both come back — and that the pattern is unchanged by whatever
+   the parameters were doing when you saved.
+8. Step through all 16 steps and confirm the widgets track the selection without
+   audible interruption, and that typing an out-of-range value snaps back.

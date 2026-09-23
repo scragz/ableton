@@ -12,11 +12,12 @@ var held = []; // [pitch, velocity], most recent last (last-note priority)
 var latched = null;
 var sounding = {}; // channel nibble -> emitted pitch, or null when the gate was suppressed
 
-function configure(json) {
-    try {
-        var input = JSON.parse(json).input;
-        mode = input === "LATCH" || input === "HOLD" ? input : "OFF";
-    } catch (e) { error("Fluxion voice: " + e.message + "\n"); }
+// `set input <index>` from the Note In parameter, which also feeds the engine.
+var INPUT = ["OFF", "LATCH", "HOLD"];
+function set(key, value) {
+    if (String(key) !== "input") return;
+    var i = Math.round(Number(value));
+    mode = INPUT[i >= 0 && i < INPUT.length ? i : 0];
 }
 
 // Upstream note from midiparse: pitch velocity (velocity 0 = release).

@@ -16,6 +16,15 @@ function runtime(file = 'fluxion-ui.js', base = new URL('./', import.meta.url)) 
   return {context, output, labels};
 }
 const plain = value => JSON.parse(JSON.stringify(value));
+function engine() {
+  const context = vm.createContext({
+    outlet() {}, post() {}, arrayfromargs: args => Array.from(args),
+    error: message => { throw Error(message); },
+  });
+  context.include = name => vm.runInContext(fs.readFileSync(new URL(name, new URL('./', import.meta.url)), 'utf8'), context);
+  context.include('fluxion-engine.js');
+  return context;
+}
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-10, `${a} != ${b}`);
 
 test('catalog grows from normal through 8.8, with distinct rhythmic choices', () => {
@@ -86,40 +95,40 @@ test('legacy states select repeated curves; variants are bounded and survive rec
   }
 });
 
-test('selector clicks and drags cross families, ALL updates both values, reset selects normal', () => {
-  const {context: c, output, labels} = runtime();
+test('the curve-mode parameter walks the catalog and clamps', () => {
+  // Multi Curve is a native live.menu per step now, so what still has to be right
+  // is the mapping from its index onto divisions and variant.
+  const {context: c, labels} = runtime();
   c.paint();
-  const control = c.controls.find(item => item.id === 'multiCurve');
-  const click = right => {
-    const x = control.x + (right ? control.w - 5 : 5), y = control.y + 15;
-    c.onclick(x, y, 1, 0, 0, 0, 0); c.ondrag(x, y, 0, 0, 0);
-  };
-  ['2.0', '2.1', '2.2', '3.0'].forEach(label => { click(true); assert.equal(c.CURVE_MODES[c.currentValue(control)].label, label); });
-  click(false); assert.equal(c.CURVE_MODES[c.currentValue(control)].label, '2.2');
-  const x = control.x + 20, y = control.y + 15;
-  c.onclick(x, y, 1, 0, 0, 0, 0); c.ondrag(x, y - 200, 1, 0, 0); c.ondrag(x, y - 200, 0, 0, 0);
-  assert.equal(c.CURVE_MODES[c.currentValue(control)].label, '8.8');
-  assert.equal(c.state.steps[1].divisions, 1);
-  c.state.all = true; output.length = 0; c.assign(control, 8);
-  assert.equal(output.length, 1);
-  c.state.steps.forEach(s => assert.equal(c.curveModeIndex(s), 8));
-  c.paint(); assert.ok(labels.includes('Multi Curve'));
-  c.ondblclick(x, y); c.state.steps.forEach(s => assert.equal(c.curveModeIndex(s), 0));
+  assert.ok(labels.includes('Multi Curve'));
+  const eng = engine();
+  const index = label => c.CURVE_MODES.findIndex(m => m.label === label);
+  for (const label of ['2.0', '2.1', '2.2', '3.0', '8.8']) {
+    eng.step(0, 'curvemode', index(label));
+    assert.equal(c.CURVE_MODES[c.curveModeIndex(eng.state.steps[0])].label, label);
+  }
+  assert.equal(eng.state.steps[1].divisions, 1, 'only the addressed step moved');
+  eng.step(0, 'curvemode', 999);
+  assert.equal(c.curveModeIndex(eng.state.steps[0]), c.CURVE_MODES.length - 1);
+  eng.step(0, 'curvemode', -5);
+  assert.equal(c.curveModeIndex(eng.state.steps[0]), 0);
 });
 
-test('each mode reaches MIDI scheduling with bounded gates; edits cancel stale events', () => {
-  const {context: c, output} = runtime('fluxion-engine.js');
-  const state = plain(c.freshState());
+test('each mode reaches MIDI scheduling with bounded gates, straight from parameters', () => {
+  const c = engine();
   for (const mode of c.CURVE_MODES) {
-    Object.assign(state.steps[0], {density: 64, divisions: mode.divisions, curveVariant: mode.variant, curve: 4, aux1: 'COPY'});
-    output.length = 0; c.configure(JSON.stringify(state));
-    assert.ok(output.some(e => e[0] === 1 && e[1] === 'bang'));
+    const index = c.CURVE_MODES.indexOf(mode);
+    c.step(0, 'density', 64);
+    c.step(0, 'curvemode', index);
+    c.step(0, 'curve', 4);
+    c.step(0, 'aux1', c.AUX_MODES.indexOf('COPY'));
+    assert.equal(c.state.steps[0].curveVariant, mode.variant);
+    assert.equal(c.state.steps[0].divisions, mode.divisions);
     const events = c.eventsFor(c.locate(0));
-    const hits = c.generateHits(state.steps[0], c.seedFor(0, 0, 0));
+    const hits = c.generateHits(c.state.steps[0], c.seedFor(0, 0, 0));
     assert.equal(events.length, 256);
     events.forEach(e => assert.ok(e.at >= 0 && e.at <= 4));
     const ons = events.filter(e => e.bytes[0] === 144);
     hits.filter(h => h.lane === 0).forEach((h, i) => near(ons[i].at, h.at / 4));
-    assert.equal(c.state.steps[0].curveVariant, mode.variant);
   }
 });
