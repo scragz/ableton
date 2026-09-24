@@ -6,7 +6,7 @@ mgraphics.init();
 mgraphics.relative_coords = 0;
 mgraphics.autofill = 0;
 include("calcinatio-theme.js");
-var LAYOUT = {"width":1030,"height":188,"fieldsets":[[0,0,150,188,"Input"],[150,0,250,188,"Core"],[400,0,130,188,"Degrade"],[530,0,250,188,"Feedback"],[780,0,250,188,"Output"]]};
+var LAYOUT = {"width":606,"height":169,"fieldsets":[[0,0,64,169,"Input"],[64,0,298,169,"Core"],[362,0,122,169,"Feedback"],[484,0,122,169,"Output"]]};
 
 function paint() {
     var i, g;

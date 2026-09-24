@@ -9,30 +9,40 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent/'theme'))
 import theme as T  # noqa: E402
 VERSION = dict(major=9, minor=0, revision=9, architecture='x64', modernui=1)
-W, H = 1030, 188
+W, H = 606, 169
 
-# Key, Live label, minimum, maximum, initial value, UI position, optional enum.
+# Face (see theme/DESIGN.md): stock dials (52x48 so 'Ceiling dB' etc. fit) on two rows (y 20 / y 104), switches in
+# their own column. Sections: Input 0..64 | Core 64..362 | Feedback 362..484 | Output 484..606.
+TOP, BOT = 20, 104
+DIAL = (52, 48)
+ORDER = ['Fold > Fuzz > Degrade', 'Degrade > Fold > Fuzz', 'Fuzz > Degrade > Fold']
+
+# Key, Live label, minimum, maximum, initial value, presentation rect, optional enum.
 CONTROLS = [
-    ('input_trim', 'Input dB', -36, 24, 0, (48, 32), None),
-    ('seed_level', 'Seed dB', -120, -60, -100, (48, 88), None),
-    ('input_mute', 'Mute Input', 0, 1, 0, (29, 162), ['Input', 'Mute']),
-    ('core_order', 'Order', 0, 2, 0, (169, 39),
-     ['Fold > Fuzz > Degrade', 'Degrade > Fold > Fuzz', 'Fuzz > Degrade > Fold']),
-    ('fold_stages', 'Stages', 1, 6, 2, (216, 63), None),
-    ('fold_depth', 'Fold', 0, 12, 4, (318, 63), None),
-    ('fuzz_bias', 'Bias', -0.8, 0.8, 0.15, (216, 122), None),
-    ('drift_rate', 'Drift Hz', 0.001, 0.3, 0.027, (318, 122), None),
-    ('bit_depth', 'Bits', 2, 16, 14, (450, 32), None),
-    ('hold_samples', 'Hold smp', 1, 64, 1, (450, 92), None),
-    ('delay_ms', 'Delay ms', 0.5, 40, 7, (574, 32), None),
-    ('mod_depth', 'Mod ms', 0, 5, 0.3, (675, 32), None),
-    ('mod_rate', 'Mod Hz', 0.001, 5, 0.13, (574, 92), None),
-    ('feedback', 'Feedback', 0, 1.7, 1.08, (675, 92), None),
-    ('ceiling', 'Ceiling dB', -24, 0, -1, (821, 32), None),
-    ('drywet', 'Dry/Wet', 0, 100, 100, (923, 32), None),
-    ('stereo', 'Stereo', 0, 1, 1, (812, 130), ['Mono', 'Stereo']),
-    ('output_trim', 'Output dB', -36, 12, -12, (923, 92), None),
+    # Input: Input over Seed, Mute between them.
+    ('input_trim', 'Input dB', -36, 24, 0, (6, TOP) + DIAL, None),
+    ('input_mute', 'Mute Input', 0, 1, 0, (8, 78, 48, 18), ['Input', 'Mute']),
+    ('seed_level', 'Seed dB', -120, -60, -100, (6, BOT) + DIAL, None),
+    # Core: Order (stacked radio) over Mono/Stereo, then one column per stage.
+    ('core_order', 'Order', 0, 2, 0, (72, 22, 112, 54), ORDER),
+    ('stereo', 'Stereo', 0, 1, 1, (72, 121, 112, 18), ['Mono', 'Stereo']),
+    ('fold_depth', 'Fold', 0, 12, 4, (192, TOP) + DIAL, None),
+    ('fold_stages', 'Stages', 1, 6, 2, (192, BOT) + DIAL, None),
+    ('fuzz_bias', 'Bias', -0.8, 0.8, 0.15, (248, TOP) + DIAL, None),
+    ('drift_rate', 'Drift Hz', 0.001, 0.3, 0.027, (248, BOT) + DIAL, None),
+    ('bit_depth', 'Bits', 2, 16, 14, (304, TOP) + DIAL, None),
+    ('hold_samples', 'Hold smp', 1, 64, 1, (304, BOT) + DIAL, None),
+    # Feedback: Delay / Feedback over the modulation pair.
+    ('delay_ms', 'Delay ms', 0.5, 40, 7, (370, TOP) + DIAL, None),
+    ('feedback', 'Feedback', 0, 1.7, 1.08, (426, TOP) + DIAL, None),
+    ('mod_depth', 'Mod ms', 0, 5, 0.3, (370, BOT) + DIAL, None),
+    ('mod_rate', 'Mod Hz', 0.001, 5, 0.13, (426, BOT) + DIAL, None),
+    # Output: Dry/Wet over Output, Ceiling beside.
+    ('drywet', 'Dry/Wet', 0, 100, 100, (492, TOP) + DIAL, None),
+    ('ceiling', 'Ceiling dB', -24, 0, -1, (548, TOP) + DIAL, None),
+    ('output_trim', 'Output dB', -36, 12, -12, (492, BOT) + DIAL, None),
 ]
+TABS = {'core_order', 'stereo'}
 
 
 def genpatch(code):
@@ -66,13 +76,10 @@ def patch():
     box('panel', 'jsui', [0, 0, W, H], filename='calcinatio-art.js',
         presentation=1, presentation_rect=[0, 0, W, H], border=0,
         ignoreclick=1, background=1, numinlets=1, numoutlets=0)
-    for i, (key, label, low, high, default, (x, y), enum) in enumerate(CONTROLS):
-        special = key in {'input_mute', 'core_order', 'stereo'}
-        cls = 'live.menu' if key == 'core_order' else 'live.text' if special else 'live.dial'
-        rect = [x, y, 212 if key == 'core_order' else 94 if key == 'input_mute' else
-                76 if special else
-                44 if key in {'fold_stages', 'fold_depth', 'fuzz_bias', 'drift_rate'} else 51,
-                21 if special else 52]
+    for i, (key, label, low, high, default, rect, enum) in enumerate(CONTROLS):
+        rect = list(rect)
+        cls = ('live.tab' if key in TABS else 'live.text' if key == 'input_mute'
+               else 'live.dial')
         # Live's decibel display turns values below its floor into "-inf";
         # show the seed's actual dB value so the dither setting is legible.
         unitstyle = (1 if key == 'seed_level'
@@ -90,17 +97,17 @@ def patch():
             attrs['parameter_enum'] = enum
         if key in {'fold_stages', 'bit_depth', 'hold_samples'}:
             attrs['parameter_type'] = 1
-        extra = (dict(text=label, texton=label, mode=1) if cls == 'live.text'
-                 else dict(showname=1, shownumber=1) if cls == 'live.dial' else {})
+        if cls == 'live.text':
+            extra = dict(text='Mute', texton='Mute', mode=1, **T.button())
+        elif cls == 'live.tab':
+            rows = len(enum) if rect[3] > 18 else 1
+            extra = dict(mode=0, num_lines_presentation=rows, num_lines_patching=rows, **T.tab())
+        else:
+            extra = T.dial()
         box(key, cls, [20+(i%8)*140, 430+(i//8)*80, rect[2], rect[3]],
-            varname=key, numinlets=1, numoutlets=3 if cls == 'live.menu' else 2,
+            varname=key, numinlets=1, numoutlets=3 if cls == 'live.tab' else 2,
             parameter_enable=1, saved_attribute_attributes={'valueof': attrs},
             presentation=1, presentation_rect=rect, **extra)
-        if special:
-            box('label_'+key, 'comment', [x, y-19, rect[2], 16], text=label,
-                presentation=1, presentation_rect=[x, y-19, rect[2], 16],
-                **T.label(),
-                numinlets=1, numoutlets=0)
         obj('prepend_'+key, 'prepend '+key, 20+(i%8)*140, 470+(i//8)*80)
         wire(key, 'prepend_'+key)
         wire('prepend_'+key, 'dsp')
@@ -166,9 +173,8 @@ def freeze(entries):
 
 def main():
     layout = dict(width=W, height=H, fieldsets=[
-        [0, 0, 150, H, 'Input'], [150, 0, 250, H, 'Core'],
-        [400, 0, 130, H, 'Degrade'], [530, 0, 250, H, 'Feedback'],
-        [780, 0, 250, H, 'Output'],
+        [0, 0, 64, H, 'Input'], [64, 0, 298, H, 'Core'],
+        [362, 0, 122, H, 'Feedback'], [484, 0, 122, H, 'Output'],
     ])
     theme = T.prelude('calcinatio').encode()
     art = T.art('calcinatio', layout).encode()
