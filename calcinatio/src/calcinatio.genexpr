@@ -1,0 +1,121 @@
+// Calcinatio: one continuously seeded core for silence and incoming audio.
+// The seed is always present, including when Input Mute is engaged.
+foldwave(x, amount, count) {
+    v = x;
+    for (i = 0; i < 6; i += 1) {
+        if (i < count) {
+            v = 1 - abs(wrap(v * (1 + amount * 0.42) + 1, 0, 4) - 2);
+        }
+    }
+    return v;
+}
+fuzzwave(x, bias) {
+    // Deliberately asymmetric; the following DC blocker keeps the loop centered.
+    return tanh((x + bias) * 2.8);
+}
+
+Param input_trim(0);
+Param seed_level(-100);
+Param input_mute(0);
+Param core_order(0);
+Param fold_stages(2);
+Param fold_depth(4);
+Param fuzz_bias(0.15);
+Param drift_rate(0.027);
+Param bit_depth(14);
+Param hold_samples(1);
+Param delay_ms(7);
+Param mod_depth(0.3);
+Param mod_rate(0.13);
+Param feedback(1.08);
+Param ceiling(-1);
+Param drywet(100);
+Param stereo(1);
+Param output_trim(-12);
+
+History driftL(0);
+History driftR(0.37);
+History modL(0);
+History modR(0.29);
+History countL(1000);
+History countR(1000);
+History heldL(0);
+History heldR(0);
+Delay loopL(16384);
+Delay loopR(16384);
+
+// Independent phases and random draws preserve stereo width in self generation.
+driftL = wrap(driftL + max(0.001, drift_rate) / samplerate, 0, 1);
+driftR = wrap(driftR + max(0.001, drift_rate) / samplerate, 0, 1);
+modL = wrap(modL + max(0.001, mod_rate) / samplerate, 0, 1);
+modR = wrap(modR + max(0.001, mod_rate) / samplerate, 0, 1);
+biasL = clamp(fuzz_bias + 0.18 * sin(twopi * driftL), -0.95, 0.95);
+biasR = clamp(fuzz_bias + 0.18 * sin(twopi * driftR), -0.95, 0.95);
+seedGain = pow(10, clamp(seed_level, -120, -60) / 20);
+inputGain = pow(10, clamp(input_trim, -36, 24) / 20);
+sourceL = input_mute >= 0.5 ? 0 : in1 * inputGain;
+sourceR = input_mute >= 0.5 ? 0 : in2 * inputGain;
+monoSource = (sourceL + sourceR) * 0.5;
+sourceL = stereo < 0.5 ? monoSource : sourceL;
+sourceR = stereo < 0.5 ? monoSource : sourceR;
+seedL = noise() * seedGain;
+seedR = noise() * seedGain;
+order = clamp(floor(core_order + 0.5), 0, 2);
+stages = clamp(floor(fold_stages + 0.5), 1, 6);
+depth = clamp(fold_depth, 0, 12);
+bits = clamp(floor(bit_depth + 0.5), 2, 16);
+levels = pow(2, bits - 1);
+hold = clamp(floor(hold_samples + 0.5), 1, 64);
+
+timeL = delay_ms + mod_depth * sin(twopi * modL);
+timeR = delay_ms + mod_depth * sin(twopi * modR);
+tapL = loopL.read(clamp(timeL * samplerate * 0.001, 2, 16380), interp="linear");
+tapR = loopR.read(clamp(timeR * samplerate * 0.001, 2, 16380), interp="linear");
+// This tanh is the loop guard; it acts before the nonlinear core, independently
+// of the final output ceiling. The read remains bounded at feedback > 1.
+guardL = tanh(fixdenorm(tapL) * clamp(feedback, 0, 1.7));
+guardR = tanh(fixdenorm(tapR) * clamp(feedback, 0, 1.7));
+startL = dcblock(sourceL + seedL + guardL);
+startR = dcblock(sourceR + seedR + guardR);
+
+// Three actual topologies: Fold/Fuzz/Degrade, Degrade/Fold/Fuzz,
+// Fuzz/Degrade/Fold. The hold/quantizer runs once per channel in all modes.
+preL = order == 0 ? fuzzwave(foldwave(startL, depth, stages), biasL)
+     : order == 1 ? startL : fuzzwave(startL, biasL);
+preR = order == 0 ? fuzzwave(foldwave(startR, depth, stages), biasR)
+     : order == 1 ? startR : fuzzwave(startR, biasR);
+countL += 1;
+countR += 1;
+if (countL >= hold) {
+    // TPDF-like quantizer dither avoids a dead band that would swallow the
+    // -100 dB seed whenever Degrade is placed first or bit depth is low.
+    heldL = round(clamp(preL + (noise() - noise()) / levels * 0.5, -1, 1) * levels) / levels;
+    countL = 0;
+}
+if (countR >= hold) {
+    heldR = round(clamp(preR + (noise() - noise()) / levels * 0.5, -1, 1) * levels) / levels;
+    countR = 0;
+}
+coreL = order == 0 ? heldL
+      : order == 1 ? fuzzwave(foldwave(heldL, depth, stages), biasL)
+      : foldwave(heldL, depth, stages);
+coreR = order == 0 ? heldR
+      : order == 1 ? fuzzwave(foldwave(heldR, depth, stages), biasR)
+      : foldwave(heldR, depth, stages);
+// Rectification and bias create DC; remove it before the feedback tap.
+cleanL = dcblock(coreL);
+cleanR = dcblock(coreR);
+loopL.write(fixdenorm(cleanL));
+loopR.write(fixdenorm(cleanR));
+
+wetL = cleanL;
+wetR = stereo < 0.5 ? cleanL : cleanR;
+dryL = stereo < 0.5 ? monoSource : sourceL;
+dryR = stereo < 0.5 ? monoSource : sourceR;
+blend = clamp(drywet * 0.01, 0, 1);
+sumL = mix(dryL, wetL, blend);
+sumR = mix(dryR, wetR, blend);
+limit = pow(10, clamp(ceiling, -24, 0) / 20);
+trim = pow(10, clamp(output_trim, -36, 12) / 20);
+out1 = clamp(tanh(sumL / limit) * limit * trim, -limit, limit);
+out2 = clamp(tanh(sumR / limit) * limit * trim, -limit, limit);

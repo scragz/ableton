@@ -181,10 +181,10 @@ if (trig < 0.5) {
 // Onset detector on the input (used by Onset trigger; flash drawn by the panel).
 m = abs(in1 + in2) * 0.5;
 envF += (m > envF ? 1 - exp(-1 / (0.0008 * sr)) : 1 - exp(-1 / (0.03 * sr))) * (m - envF);
-envS += (m > envS ? 1 - exp(-1 / (0.06 * sr)) : 1 - exp(-1 / (0.5 * sr))) * (m - envS);
+envS += (m > envS ? 1 - exp(-1 / (0.15 * sr)) : 1 - exp(-1 / (0.4 * sr))) * (m - envS);
 lockout = max(lockout - 1, 0);
 onset = 0;
-if (lockout <= 0 && envF > envS * (1.4 + (1 - sens) * 4.6) + 0.000001 && envF > dbtoa(-60 + (1 - sens) * 36)) {
+if (lockout <= 0 && envF > envS * (1.25 + (1 - sens) * 2.5) + 0.000001 && envF > dbtoa(-66 + (1 - sens) * 36)) {
     onset = 1;
     lockout = max(sr * 0.06, period * 0.5);
     onsetFlash = 1;
@@ -299,6 +299,9 @@ for (v = 0; v < 6; v += 1) {
         f = max(fade, min(96 / len, 0.5));
         amp = envelope(xx, f, swell);
         pa = st + dv * rt * age + wowOff;
+        // A grain can only ever reach pre + len * (1 + rate) behind the write head (+ wow); beyond
+        // that it would be reading stale audio, so kill it.
+        if (wAbs - pa > pre + len * (1 + rt) + sr * 0.05) { amp = 0; age = len; }
         p = wrap(pa, 0, size);
         l = sample(mem, p, 0, index="samples", interp="cubic", boundmode="wrap");
         r = sample(mem, p, 1, index="samples", interp="cubic", boundmode="wrap");
@@ -350,10 +353,13 @@ if (tState > 0.5 && valid) {
         gTarget = xx < 1 ? skew(xx, swell) : 0;
         tAge += 1;
     }
-    // Never read ahead of the write head; go idle once the head has drifted out of useful range.
+    // Never read ahead of the write head. The head may only ever sit within one chunk's reach of
+    // it; anything further back is stale buffer audio, so silence it and park the head. Also park
+    // it when no new chunk has arrived for 2 s past the end of play (Onset, stopped clocks).
     tpos = min(tpos, wAbs - 2);
     tdist = wAbs - tpos;
-    if (tdist > size * 0.9) { gTarget = 0; tState = 0; }
+    reach = pre + (tCatch + tPlay) * (1 + rate) + tCatch + sr * 0.05;
+    if (tdist > reach || (tState > 1.5 && tAge > tPlay + sr * 2)) { gTarget = 0; tGain = 0; tState = 0; }
     tPos = tpos;
     tVel = tvel;
     tGain += (gTarget - tGain) * (1 - exp(-1 / (0.003 * sr)));
@@ -477,9 +483,11 @@ tl = tone < 0 ? 1 : 1 - tone;
 th = tone < 0 ? 1 + tone : 1;
 fL = lpL * tl + (fL - lpL) * th;
 fR = lpR * tl + (fR - lpR) * th;
+// Drive saturates without make-up gain: small-signal loop gain is exactly Feedback, so the loop
+// can't self-oscillate from Drive, only compress louder material harder.
 gd = 1 + drive * 8;
-fL = dcblock(tanh(fL * smFb * gd) / sqrt(gd));
-fR = dcblock(tanh(fR * smFb * gd) / sqrt(gd));
+fL = dcblock(tanh(fL * smFb * gd) / gd);
+fR = dcblock(tanh(fR * smFb * gd) / gd);
 
 if (valid && freeze < 0.5) {
     poke(mem, fixdenorm(in1 + fL), wi, 0);

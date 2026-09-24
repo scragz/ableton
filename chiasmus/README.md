@@ -98,6 +98,14 @@ Original implementation; not an emulation of any of these.
   is a velocity-continuous Hermite path computed per chunk.
 - Freeze — Particle. Reverse into diffusion — Walrus Lore, EQD Avalanche Run.
 
+## Safety guards
+
+- Every read head is bounded: a grain or the tape head that ends up further behind the write head
+  than it could legitimately reach (`pre + length × (1 + rate)` plus a small margin) is silenced and
+  retired, so nothing can ever replay stale buffer audio. A tape head with no new chunk for 2 s parks.
+- Drive has no make-up gain: small-signal loop gain is exactly Feedback, so the loop only
+  self-sustains at Feedback 100 %, never from Drive.
+
 ## Limits / known gaps
 
 - Sync phase alignment is per beat; divisions longer than a beat are not guaranteed to land on bar lines.
@@ -121,4 +129,9 @@ Automated checks cover packaging/logic only; they do not replace listening in Li
 - Gotcha while testing: Freeze renders run from the start of the arrangement, so a clip that isn't at
   bar 1 looks like the effect "resurrecting". Put the test clip at bar 1 before trusting a render.
 - Live sometimes keeps a stale copy of a rebuilt frozen device; delete and re-add it after a build.
+- Offline harness `tests/harness.cjs` runs the real GenExpr (mechanically translated to JS) sample
+  by sample; `tests/sweep.cjs` pushes parameter combos through it and flags tails that decay and come
+  back. It found Onset mode going silent after ~2 s of dense input (slow envelope too fast, ratio too
+  strict) — fixed. It did *not* reproduce the reported fade-out/fade-back-in; the head guards above
+  make that failure class impossible regardless of cause. Harness ≠ Max: linear `sample()`, seeded noise.
 - **Not yet auditioned:** Sync, Onset, Scatter, Cross > 0, Pitch ≠ 0, Freeze, Wow, Diffuse/Drive extremes, Width/Duck.

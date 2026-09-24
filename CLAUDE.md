@@ -99,7 +99,7 @@ several scripts use CWD-relative paths.
 Automated checks only cover logic/packaging — they never substitute for loading the
 device in Live. Say so explicitly when reporting results.
 
-- chiasmus: `python3 tests/check_render.py tests/chiasmus-test.wav <freeze render>` (render made in Live; see README)
+- chiasmus: `node tests/harness.cjs '{"drywet":1}' 30 8` (runs the real GenExpr offline), `START=0 COUNT=60 node tests/sweep.cjs`, `python3 tests/tape_model.py`, `python3 tests/check_render.py <freeze render>`
 - fluxion: `node --test src/multicurve.test.mjs src/mods.test.mjs src/face.test.mjs` (mods and face read `device/Fluxion.maxpat`, so build first)
 - hypna: `node --test tests/*.test.cjs`, `python3 tests/structure.py` (tests reference `device/` loose files — may need the staging paths)
 - materia: `python3 scripts/test_defaults.py`, `node scripts/test_reference.cjs`, `node scripts/test_routing.cjs` (need a build first — read `scripts/build/schema.json`)
