@@ -1,0 +1,360 @@
+// Atomism - granular shredder tuned for glitch, not texture.
+// Input is written continuously into a stereo buffer~ (mem). A scheduler fires short grains
+// (default 2.5 ms) from it into 16 voices; each grain gets its own read offset (Spray), rate
+// (Pitch + Random, optionally quantized), direction (Reverse), length (Size + Vary) and pan.
+// Grain starts come from a Source (Free clock, host Sync, input Onset, Chaos) plus the Trig
+// parameter; outside Free every event fires a Burst of grains spaced by Density.
+// Every random draw comes from one Entropy source: white noise, a logistic map stepped once per
+// grain (r = 3.5..4: periodic patterns -> full chaos), or a continuously running Lorenz system.
+// Discipline: each History is read into a local before it is written, and written once, so the
+// code does not depend on read-after-write semantics inside a sample.
+// GenExpr functions must precede every declaration and statement.
+logistic(x, r) {
+    y = r * x * (1 - x);
+    if (y < 0.000001 || y > 0.999999) y = 0.412345;
+    return y;
+}
+
+Buffer mem;
+Buffer view;
+Data voices(16, 8); // per voice: 0 age, 1 length, 2 start (abs samples), 3 signed rate, 4 gain L, 5 gain R, 6 active
+
+Param src(0, min=0, max=3);            // 0 free, 1 sync, 2 onset, 3 chaos
+Param density(120, min=1, max=4000);   // grains per second
+Param beats(0.25, min=0.0625, max=4);  // sync division in beats
+Param burst(8, min=1, max=64);         // grains per event
+Param sens(0.5, min=0, max=1);         // onset sensitivity / chaos event density
+Param trigin(0, min=0, max=1);         // rising edge fires a burst
+Param sizems(2.5, min=0.1, max=100);
+Param sizernd(0.3, min=0, max=1);
+Param wshape(1, min=0, max=3);         // 0 rect, 1 tri, 2 hann, 3 click
+Param reverse(0.25, min=0, max=1);
+Param jitter(0.4, min=0, max=1);
+Param sprayms(60, min=0, max=1000);
+Param pitch(0, min=-24, max=24);
+Param prand(12, min=0, max=24);
+Param quant(0, min=0, max=3);          // 0 off, 1 semitone, 2 fifths, 3 octaves
+Param entropy(1, min=0, max=2);        // 0 noise, 1 logistic, 2 lorenz
+Param chaos(0.85, min=0, max=1);
+Param speed(2, min=0.01, max=100);     // lorenz time units per second
+Param holdon(0, min=0, max=1);
+Param feedback(0, min=0, max=1);
+Param width(0.5, min=0, max=1);
+Param drywet(1, min=0, max=1);
+Param outdb(0, min=-24, max=12);
+
+History wAbs(0);
+History countdown(0);
+History burstLeft(0);
+History evClock(0);
+History lastTrig(0);
+History prevPhase(0);
+History beatCount(0);
+History beatSamples(22050);
+History stillFor(0);
+History lastTick(-1);
+History envF(0);
+History envS(0);
+History lockout(0);
+History onsetFlash(0);
+History cx(0.412345);
+History ex(0.271828);
+History lx(0.1);
+History ly(0);
+History lz(20);
+History ringPos(0);
+History clk(0);
+History viewClock(0);
+History smMix(1);
+History smOut(1);
+History pkL(0);
+History pkR(0);
+History lastD0(0);
+
+size = dim(mem);
+valid = size > 4096;
+sr = samplerate;
+dryL = in1;
+dryR = in2;
+w0 = wAbs;
+wi = wrap(w0, 0, size);
+dens = clamp(density, 1, 4000);
+spacing = sr / dens;
+now = clk;
+rpn = ringPos;
+ld0 = lastD0;
+
+// ---- host tempo (plugphasor~ beat phase) ----
+ph = in3;
+inc = wrap(ph - prevPhase, -0.5, 0.5);
+bc = beatCount;
+if (ph < prevPhase - 0.5) bc = (bc + 1) % 4096;
+prevPhase = ph;
+beatCount = bc;
+bs = beatSamples;
+still = stillFor;
+running = 0;
+if (inc > 0.0000001) {
+    bs = clamp(1 / inc, sr * 0.1, sr * 4);
+    still = 0;
+    running = 1;
+} else {
+    still = min(still + 1, sr);
+    running = still < 2048;
+}
+beatSamples = bs;
+stillFor = still;
+
+// ---- onset detector on the input ----
+m = abs(in1 + in2) * 0.5;
+ef = envF;
+es = envS;
+ef += (m > ef ? 1 - exp(-1 / (0.0008 * sr)) : 1 - exp(-1 / (0.03 * sr))) * (m - ef);
+es += (m > es ? 1 - exp(-1 / (0.15 * sr)) : 1 - exp(-1 / (0.4 * sr))) * (m - es);
+envF = ef;
+envS = es;
+lo = max(lockout - 1, 0);
+onset = 0;
+if (lo <= 0 && ef > es * (1.25 + (1 - sens) * 2.5) + 0.000001 && ef > dbtoa(-66 + (1 - sens) * 36)) {
+    onset = 1;
+    lo = sr * 0.06;
+}
+lockout = lo;
+of = onsetFlash * 0.9997;
+if (onset) of = 1;
+onsetFlash = of;
+
+// ---- Lorenz attractor, always integrated so switching Entropy is seamless ----
+rho = 18 + clamp(chaos, 0, 1) * 32;
+dt = clamp(speed, 0.01, 100) / sr;
+ox = lx;
+oy = ly;
+oz = lz;
+nlx = ox + 10 * (oy - ox) * dt;
+nly = oy + (ox * (rho - oz) - oy) * dt;
+nlz = oz + (ox * oy - 2.6666667 * oz) * dt;
+if (!(abs(nlx) < 500) || !(abs(nly) < 500) || !(abs(nlz) < 500)) {
+    nlx = 0.1;
+    nly = 0;
+    nlz = 20;
+}
+lx = nlx;
+ly = nly;
+lz = nlz;
+lnx = clamp(nlx / 40 + 0.5, 0, 1);
+lny = clamp(nly / 56 + 0.5, 0, 1);
+lnz = clamp(nlz / (rho * 1.8), 0, 1);
+rlog = 3.5 + clamp(chaos, 0, 1) * 0.5;
+
+// ---- events ----
+evt = 0;
+tr = trigin;
+if (tr > 0.5 && lastTrig < 0.5) evt = 1;
+lastTrig = tr;
+ec = evClock - 1;
+if (src > 0.5 && src < 1.5) {
+    // Sync: one event per grid tick of `beats`; a free clock of the same length when stopped.
+    if (running) {
+        tick = floor((bc + ph) / beats);
+        if (tick != lastTick) evt = 1;
+        lastTick = tick;
+        ec = beats * bs;
+    } else if (ec <= 0) {
+        ec = beats * bs;
+        evt = 1;
+    }
+} else if (src > 1.5 && src < 2.5) {
+    if (onset) evt = 1;
+} else if (src > 2.5) {
+    if (entropy > 1.5) {
+        // Lorenz: an event each time the orbit climbs through a z level (about one per loop).
+        zc = (rho - 1) * (0.7 + (1 - sens) * 0.7);
+        if (oz < zc && nlz >= zc) evt = 1;
+    } else if (ec <= 0) {
+        ec = spacing * max(1, burst);
+        if (entropy > 0.5) {
+            nex = logistic(ex, rlog);
+            ex = nex;
+            if (nex > 1 - sens) evt = 1;
+        } else if (noise() * 0.5 + 0.5 < sens) evt = 1;
+    }
+}
+evClock = ec;
+
+// ---- grain clock ----
+bl = burstLeft;
+cd = countdown - 1;
+if (evt) {
+    bl = floor(burst + 0.5);
+    cd = 0;
+}
+fire = 0;
+if (cd <= 0) {
+    if (src < 0.5 || bl > 0) {
+        fire = 1;
+        bl = max(bl - 1, 0);
+    } else cd = 0;
+}
+
+d0 = 0.5;
+d1 = 0.5;
+d2 = 0.5;
+d3 = 0.5;
+d4 = 0.5;
+d5 = 0.5;
+if (fire) {
+    if (entropy < 0.5) {
+        d0 = noise() * 0.5 + 0.5;
+        d1 = noise() * 0.5 + 0.5;
+        d2 = noise() * 0.5 + 0.5;
+        d3 = noise() * 0.5 + 0.5;
+        d4 = noise() * 0.5 + 0.5;
+        d5 = noise() * 0.5 + 0.5;
+    } else if (entropy < 1.5) {
+        // One map step per grain; every draw is a fixed function of that one value, so when the
+        // map settles into a cycle the whole grain stream repeats with it.
+        ncx = logistic(cx, rlog);
+        cx = ncx;
+        d0 = ncx;
+        d1 = fract(ncx * 7.31);
+        d2 = fract(ncx * 13.97);
+        d3 = fract(ncx * 23.3);
+        d4 = fract(ncx * 41.7);
+        d5 = fract(ncx * 3.37);
+    } else {
+        d0 = lnx;
+        d1 = lny;
+        d2 = lnz;
+        d3 = fract(lnx * 7.31 + lny * 3.1);
+        d4 = fract(lny * 9.7 + lnz * 5.3);
+        d5 = fract(lnz * 11.3 + lnx * 2.9);
+    }
+    ld0 = d0;
+    cd = max(1, spacing * (1 + clamp(jitter, 0, 1) * (2 * d1 - 1)));
+}
+countdown = cd;
+burstLeft = bl;
+lastD0 = ld0;
+
+if (fire && valid) {
+    glen = clamp(sizems * 0.001 * sr * pow(2, sizernd * 2 * (2 * d3 - 1)), 8, sr * 0.2);
+    semis = pitch + prand * (2 * d0 - 1);
+    if (quant > 0.5 && quant < 1.5) semis = floor(semis + 0.5);
+    else if (quant > 1.5 && quant < 2.5) {
+        oc = floor(semis / 12);
+        fr = semis - oc * 12;
+        q = 12;
+        if (fr < 3.5) q = 0;
+        else if (fr < 9.5) q = 7;
+        semis = oc * 12 + q;
+    } else if (quant > 2.5) semis = floor(semis / 12 + 0.5) * 12;
+    semis = clamp(semis, -48, 36);
+    grate = pow(2, semis / 12);
+    gdir = d4 < reverse ? -1 : 1;
+    off = sprayms * 0.001 * sr * d2 + 4;
+    // A forward grain faster than 1x would overtake the write head: start it further back.
+    if (gdir > 0) off += max(0, glen * (grate - 1));
+    off = clamp(off, 4, size - glen * grate - 16);
+    pan = clamp(width, 0, 1) * (2 * d5 - 1);
+    g = 1 / sqrt(max(1, dens * glen / sr));
+    slot = 0;
+    best = -1;
+    for (v = 0; v < 16; v += 1) {
+        sc = 2;
+        if (peek(voices, v, 6) > 0.5) sc = peek(voices, v, 0) / max(1, peek(voices, v, 1));
+        if (sc > best) {
+            best = sc;
+            slot = v;
+        }
+    }
+    poke(voices, 0, slot, 0);
+    poke(voices, glen, slot, 1);
+    poke(voices, w0 - off, slot, 2);
+    poke(voices, grate * gdir, slot, 3);
+    poke(voices, g * min(1, 1 - pan), slot, 4);
+    poke(voices, g * min(1, 1 + pan), slot, 5);
+    poke(voices, 1, slot, 6);
+    // Display ring: 48 grains x 5 fields (distance, pitch, direction, entropy draw, birth time).
+    rp = rpn;
+    poke(view, clamp(off / (sr * 1.2), 0, 1), rp * 5, 0);
+    poke(view, clamp(semis / 36, -1, 1), rp * 5 + 1, 0);
+    poke(view, gdir, rp * 5 + 2, 0);
+    poke(view, d0, rp * 5 + 3, 0);
+    poke(view, now + 0.001, rp * 5 + 4, 0);
+    rpn = (rp + 1) % 48;
+    ringPos = rpn;
+}
+
+// ---- voices ----
+wetL = 0;
+wetR = 0;
+nact = 0;
+for (v = 0; v < 16; v += 1) {
+    if (peek(voices, v, 6) > 0.5 && valid) {
+        age = peek(voices, v, 0);
+        vlen = max(peek(voices, v, 1), 1);
+        xx = age / vlen;
+        amp = 1;
+        if (wshape > 0.5 && wshape < 1.5) amp = 1 - abs(2 * xx - 1);
+        else if (wshape > 1.5 && wshape < 2.5) amp = 0.5 - 0.5 * cos(twopi * xx);
+        else if (wshape > 2.5) amp = exp(-6 * xx);
+        p = wrap(peek(voices, v, 2) + age * peek(voices, v, 3), 0, size);
+        l = sample(mem, p, 0, index="samples", interp="cubic", boundmode="wrap");
+        r = sample(mem, p, 1, index="samples", interp="cubic", boundmode="wrap");
+        wetL += l * amp * peek(voices, v, 4);
+        wetR += r * amp * peek(voices, v, 5);
+        age += 1;
+        poke(voices, age, v, 0);
+        if (age >= vlen) poke(voices, 0, v, 6);
+        nact += 1;
+    }
+}
+wetL = tanh(dcblock(wetL));
+wetR = tanh(dcblock(wetR));
+
+// ---- buffer write: input plus shredded output (Feedback); Hold stops writing entirely ----
+nw = w0;
+if (holdon < 0.5 && valid) {
+    fb = clamp(feedback, 0, 1) * 0.95;
+    poke(mem, fixdenorm(in1 + fb * wetL), wi, 0);
+    poke(mem, fixdenorm(in2 + fb * wetR), wi, 1);
+    nw = w0 + 1;
+}
+wAbs = nw;
+clk = wrap(now + 1 / sr, 0, 10000);
+
+// ---- output ----
+sm = smMix + (clamp(drywet, 0, 1) - smMix) * 0.002;
+smMix = sm;
+og = smOut + (dbtoa(outdb) - smOut) * 0.002;
+smOut = og;
+dg = cos(sm * halfpi);
+wg = sin(sm * halfpi);
+o1 = clamp(fixdenorm((dryL * dg + wetL * wg) * og), -0.966, 0.966);
+o2 = clamp(fixdenorm((dryR * dg + wetR * wg) * og), -0.966, 0.966);
+pl = max(abs(o1), pkL * 0.9997);
+pr = max(abs(o2), pkR * 0.9997);
+pkL = pl;
+pkR = pr;
+
+// ---- status for the panel (indices 240+) ----
+vc = viewClock;
+if (vc <= 0) {
+    vc = 256;
+    poke(view, now, 240, 0);
+    poke(view, of, 241, 0);
+    poke(view, entropy > 1.5 ? lnx : ld0, 242, 0);
+    poke(view, holdon, 243, 0);
+    poke(view, nact / 16, 244, 0);
+    poke(view, running, 245, 0);
+    poke(view, bs / sr, 246, 0);
+    poke(view, lnx, 247, 0);
+    poke(view, lnz, 248, 0);
+    poke(view, pl, 249, 0);
+    poke(view, pr, 250, 0);
+    poke(view, rpn, 251, 0);
+}
+viewClock = vc - 1;
+
+out1 = o1;
+out2 = o2;

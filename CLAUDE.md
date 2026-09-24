@@ -7,6 +7,7 @@ This folder is a workspace, not a repo. Each subfolder is its **own git repo**
 
 | Folder | Device | Type | Build | Reference / inspiration |
 | --- | --- | --- | --- | --- |
+| `atomism/` | Atomism | Audio effect: glitch granular shredder — 16 gen~ grain voices (0.3–50 ms) from a 4 s buffer~, Free/Sync/Onset/Chaos sources + mappable Trig, Burst, one Entropy source (Noise / Logistic map / Lorenz) for every random draw, Hold + Feedback. Builds into `device/` | `python3 scripts/build.py` | Original; `docs/spec.md` |
 | `chiasmus/` | Chiasmus | Audio effect: reverse delay, Grain (6 windowed voices) or Tape (one head, Hermite stop/fast-forward catch-up) engine; Free/Sync/Onset triggers, Rev/Alt/ABBA patterns, Cross (blend or per-chunk Scatter) between forward echo and re-reversing loop. Builds everything into `device/` (no `scripts/build/`) | `python3 scripts/build.py` | Survey of reverse delays; see README "Influences and differences" |
 | `fluxion/` | Fluxion | MIDI effect: 16-step rhythm channel, curve editor, Main/Aux1/Aux2 note lanes. Every value is a Live parameter (309), per-step values banked 16x so modulators can map them | `node scripts/build.mjs` | Flux manual (`docs/flux-user-manual.pdf`) |
 | `hypna/` | Hypna | Instrument: 5-voice prime-ratio drone, wavetables, reverb | `python3 scripts/build.py` | Drone module; see README "Differences from the reference" |
@@ -99,6 +100,7 @@ several scripts use CWD-relative paths.
 Automated checks only cover logic/packaging — they never substitute for loading the
 device in Live. Say so explicitly when reporting results.
 
+- atomism: `node --test tests/dsp.test.cjs tests/js.test.cjs` (build first; dsp runs the GenExpr offline via `tests/harness.cjs`)
 - chiasmus: `node tests/harness.cjs '{"drywet":1}' 30 8` (runs the real GenExpr offline), `START=0 COUNT=60 node tests/sweep.cjs`, `python3 tests/tape_model.py`, `python3 tests/check_render.py <freeze render>`
 - fluxion: `node --test src/multicurve.test.mjs src/mods.test.mjs src/face.test.mjs` (mods and face read `device/Fluxion.maxpat`, so build first)
 - hypna: `node --test tests/*.test.cjs`, `python3 tests/structure.py` (tests reference `device/` loose files — may need the staging paths)
