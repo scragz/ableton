@@ -1,0 +1,193 @@
+// Coagula playback: concatenative segment player.
+// The Node engine chooses segments; this plays them sample-accurately. One pending slot holds the
+// next segment (start / length in source samples, rate in source samples per second, gain,
+// crossfade ms). A new pcommit value marks the slot filled. Out 3 is high while the slot is empty
+// (Chain / Clock only), so the engine pre-selects the next segment as soon as one is consumed.
+//   Chain: next segment starts at (current end - crossfade); monophonic apart from the overlap.
+//   Clock: a free rate in Hz, or host-synced divisions of the beat; polyphonic, 32 voices.
+//   MIDI:  every commit fires at once (the engine commits on note-on).
+// Voices: equal-power fades in and out over the crossfade (clamped to half the segment).
+// Discipline: each History is read into a local before it is written, and written once.
+
+Buffer src;
+Data voices(32, 8); // per voice: 0 pos, 1 inc, 2 t, 3 D (out samples), 4 xf, 5 gain, 6 active, 7 serial
+
+Param ready(0, min=0, max=1);
+Param tmode(0, min=0, max=2);
+Param gateon(0, min=0, max=1);
+Param clockhz(8, min=0.5, max=100);
+Param sync(0, min=0, max=1);
+Param beats(0.25, min=0.015625, max=16);
+Param outdb(0, min=-70, max=6);
+Param pcommit(0);
+Param pstart(0);
+Param plen(0);
+Param prate(44100);
+Param pgain(1);
+Param pxf(8, min=0, max=1000);
+
+History lastcommit(0);
+History pvalid(0);
+History nextT(0);
+History clkPh(0);
+History prevPhase(0);
+History beatCount(0);
+History stillFor(4096);
+History lastTick(-1);
+History lim(1);
+History smGain(1);
+History serial(0);
+History lastGate(0);
+
+sr = samplerate;
+frames = dim(src);
+nch = channels(src);
+ok = ready > 0.5 && frames > 16;
+mode = floor(tmode + 0.5);
+
+// ---- pending slot
+pv = pvalid;
+lc = lastcommit;
+if (pcommit != lc) {
+    pv = 1;
+    lc = pcommit;
+}
+lastcommit = lc;
+
+// ---- host tempo (plugphasor~ beat phase on in 1)
+ph = in1;
+inc = wrap(ph - prevPhase, -0.5, 0.5);
+bc = beatCount;
+if (ph < prevPhase - 0.5) bc = (bc + 1) % 65536;
+prevPhase = ph;
+beatCount = bc;
+still = stillFor;
+if (inc > 0.0000001) still = 0;
+else still = min(still + 1, sr);
+stillFor = still;
+running = still < 2048;
+
+// ---- triggers
+g = gateon > 0.5;
+fire = 0;
+nt = nextT;
+ck = clkPh;
+lt = lastTick;
+if (ok) {
+    if (mode == 0) {
+        if (g) {
+            if (lastGate < 0.5) nt = 0;
+            nt = nt - 1;
+            if (nt <= 0 && pv > 0.5) fire = 1;
+        } else nt = 0;
+    } else if (mode == 1) {
+        if (sync > 0.5) {
+            tick = floor((bc + ph) / beats);
+            if (running && tick != lt && g && pv > 0.5) fire = 1;
+            if (running) lt = tick;
+            else lt = -1;
+        } else {
+            ck = ck + clamp(clockhz, 0.5, 100) / sr;
+            if (g && lastGate < 0.5) ck = 1;
+            if (ck >= 1) {
+                ck = ck - floor(ck);
+                if (g && pv > 0.5) fire = 1;
+            }
+        }
+    } else {
+        if (pv > 0.5) fire = 1;
+    }
+}
+lastGate = g;
+
+// ---- start a voice from the pending slot
+sv = serial;
+if (fire) {
+    vinc = max(prate, 1) / sr;
+    D = max(plen / vinc, 4);
+    xfs = clamp(pxf * 0.001 * sr, 1, D * 0.5);
+    // free voice, else steal the one closest to its end
+    pick = -1;
+    best = -1;
+    stealv = 0;
+    for (v = 0; v < 32; v += 1) {
+        if (pick < 0) {
+            if (peek(voices, v, 6) < 0.5) pick = v;
+            else {
+                prog = peek(voices, v, 2) / max(peek(voices, v, 3), 1);
+                if (prog > best) {
+                    best = prog;
+                    stealv = v;
+                }
+            }
+        }
+    }
+    if (pick < 0) pick = stealv;
+    sv = sv + 1;
+    poke(voices, clamp(pstart, 0, frames - 2), pick, 0);
+    poke(voices, vinc, pick, 1);
+    poke(voices, 0, pick, 2);
+    poke(voices, D, pick, 3);
+    poke(voices, xfs, pick, 4);
+    poke(voices, pgain, pick, 5);
+    poke(voices, 1, pick, 6);
+    poke(voices, sv, pick, 7);
+    pv = 0;
+    if (mode == 0) nt = max(D - xfs, 1);
+}
+serial = sv;
+pvalid = pv;
+nextT = nt;
+clkPh = ck;
+lastTick = lt;
+
+// ---- voices
+sl = 0;
+sr2 = 0;
+nact = 0;
+stereo = nch > 1.5;
+for (v = 0; v < 32; v += 1) {
+    if (peek(voices, v, 6) > 0.5) {
+        if (!ok) poke(voices, 0, v, 6);
+        else {
+            pos = peek(voices, v, 0);
+            vi = peek(voices, v, 1);
+            t = peek(voices, v, 2);
+            D2 = peek(voices, v, 3);
+            xf = peek(voices, v, 4);
+            a = clamp(t / xf, 0, 1);
+            b = clamp((D2 - t) / xf, 0, 1);
+            env = sin(a * halfpi) * sin(b * halfpi) * peek(voices, v, 5);
+            l = sample(src, pos, 0, index="samples", interp="cubic", boundmode="clamp");
+            r = l;
+            if (stereo) r = sample(src, pos, 1, index="samples", interp="cubic", boundmode="clamp");
+            sl += l * env;
+            sr2 += r * env;
+            nact += 1;
+            t = t + 1;
+            pos = pos + vi;
+            if (t >= D2 || pos >= frames - 2) poke(voices, 0, v, 6);
+            else {
+                poke(voices, t, v, 2);
+                poke(voices, pos, v, 0);
+            }
+        }
+    }
+}
+
+// ---- output: gain (-70 dB = off), then a peak limiter at -0.2 dBFS
+gt = outdb > -69.9 ? dbtoa(outdb) : 0;
+sg = smGain + (gt - smGain) * 0.002;
+smGain = sg;
+yl = sl * sg;
+yr = sr2 * sg;
+pk = max(abs(yl), abs(yr));
+lm = lim;
+target = pk > 0.977 ? 0.977 / pk : 1;
+if (target < lm) lm = target;
+else lm = min(target, lm + (1 - lm) * (1 - exp(-1 / (0.1 * sr))));
+lim = lm;
+out1 = yl * lm;
+out2 = yr * lm;
+out3 = ok && mode < 1.5 && pv < 0.5;
+out4 = nact;

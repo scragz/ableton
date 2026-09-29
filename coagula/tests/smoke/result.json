@@ -1,0 +1,14 @@
+{
+  "file": "/Users/scragz/Projects/max/coagula/tests/smoke/coagula-smoke.js",
+  "dir": "/Users/scragz/Projects/max/coagula/tests/smoke",
+  "cwd": "/Users/scragz/Projects/max/coagula/tests/smoke",
+  "node": "v22.18.0",
+  "t": 1790347017352,
+  "msgs": [
+    [
+      false,
+      "drop",
+      "none"
+    ]
+  ]
+}

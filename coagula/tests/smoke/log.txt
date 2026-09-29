@@ -1,0 +1,10 @@
+probe open=1 path= / coagula-smoke.js eof=551
+0 status start success dictionary u926005314
+0 status loadstart success dictionary u996005315
+0 status loadend success dictionary u608005316
+0 status terminated success dictionary u426005319
+0 status stop success dictionary u961005320
+0 status start success dictionary u579005321
+0 status loadstart success dictionary u772005322
+0 status loadend success dictionary u240005323
+0 echo 0 drop none
