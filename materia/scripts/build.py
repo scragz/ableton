@@ -22,7 +22,7 @@ def gen(code):
  for i in range(6):b.append({'box':dict(id=f'out{i}',maxclass='newobj',text=f'out {i+1}',patching_rect=[20+100*i,840,50,22])});l.append({'patchline':dict(source=['code',i],destination=[f'out{i}',0])})
  return dict(fileversion=1,appversion=V,classnamespace='dsp.gen',rect=[0,0,1240,900],boxes=b,lines=l)
 code=build();(ROOT/'src/materia.genexpr').write_text(code)
-obj('control','v8 materia.control.js',20,230,no=2,varname='control')
+obj('control','js materia.control.js',20,230,no=2,varname='control')
 box('panel','jsui',[0,0,1360,169],filename='materia.panel.js',varname='panel',numinlets=1,numoutlets=1,presentation=1,presentation_rect=[0,0,1360,169],border=0)
 wire('panel','control');wire('control','panel',1)
 counts={}

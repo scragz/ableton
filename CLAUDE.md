@@ -14,7 +14,7 @@ This folder is a workspace, not a repo. Each subfolder is its own effect
 | `hypna/` | Hypna | Instrument: 5-voice prime-ratio drone, wavetables, reverb | `python3 scripts/build.py` | Drone module; see README "Differences from the reference" |
 | `materia/` | Materia | Audio effect: pool of 8-bit Leibniz-style bus modules, free routing | `python3 scripts/build.py` | Xaoc Leibniz; spec in `docs/spec.md` (v0.2) |
 | `soma/` | Soma | Instrument: three-oscillator PM/FM network + low-pass gate | `python3 scripts/build.py` | Three Body + Natural Gate manuals; `docs/instrument-design.md` |
-| `syzygy/` | Syzygy (v2) | Instrument **and** audio effect (`Syzygy.amxd`, `Syzygy Audio.amxd`) from one source: resonator bodies (wood/glass/metal), feedback field | `python3 scripts/build.py` | `docs/orbit.md`; v1 lives in `legacy/` |
+| `syzygy/` | Syzygy (v3) | Instrument **and** audio effect (`Syzygy.amxd`, `Syzygy Audio.amxd`) from one source: a per-sample gravitational three-body sim (Eight / Lagrange / Euler / Swarm, contact, wall, thermostat) plays three 8-mode resonators with Matter morph; syzygies and collisions strike, distance couples (Gravity), potential bends pitch (Tide), speed bows, position pans / Doppler; Feed, FDN Space, grab-and-throw orbit display, MIDI Root / Bodies. GenExpr has no functions (modes live in `Data`) so `tests/harness.cjs` translates it directly | `python3 scripts/build.py` | Original; `README.md`, ethos from `docs/orbit.md`; v1 in `legacy/`, v2 in `legacy/v2/` |
 | `vermiform/` | Vermiform | Instrument: mono speech synth, 7 voice families, 64 modes, "worm" corruption engine | `python3 scripts/build.py` | ERD/WORM manual; `docs/vermiform-m4l-spec.md` |
 | `vril/` | Vril | Instrument: 9 generator/processor algorithms | `python3 scripts/build.py` | Vhikk X manual + algorithm reference |
 | `teevee/` | Teevee | Audio effect: video-metaphor DSP (MSP) + Jitter visualizer | none — hand-built `.maxpat` modules | `docs/architecture.md`, `docs/current-plan.md` |
@@ -35,8 +35,11 @@ several scripts use CWD-relative paths.
   `sample(buf, i, ch, index="samples", interp="cubic")`. A codebox compile error shows only as a
   blank `codebox` line in Live; open `scripts/build/<Name>.maxpat` in Live's bundled Max
   (`Ableton Live 12 Suite.app/Contents/App-Resources/Max/Max.app`) to read the message.
-- **Control** is Max JS (`js`, or `v8` in materia and vril) handling MIDI, state, and UI
-  logic. **Panels** are `jsui` scripts for things Live has no widget for. Where a
+- **Control** is Max JS (`js`) handling MIDI, state, and UI logic. Not `v8`: it only exists in
+  Max 9 (Live 12.1+), and on Live 11 / 12.0 the object fails to create and the device goes silent
+  or dead to clicks. Legacy `js`/`jsui` are **ES5 at runtime** -- no `Array.prototype.fill`,
+  `Array.from`, `Object.assign`, `.includes`, `Map`/`Set`, etc. Node's vm tests won't catch these;
+  materia's `scripts/test_es5.cjs` strips them and runs the built scripts (copy it for other devices). **Panels** are `jsui` scripts for things Live has no widget for. Where a
   device's face is mostly custom (fluxion), the jsui is *background chrome only* —
   sections, fieldset frames and row labels — with native `live.*` widgets laid over
   it in presentation and a control script marshalling them against the state. Page
@@ -106,8 +109,8 @@ device in Live. Say so explicitly when reporting results.
 - chiasmus: `node tests/harness.cjs '{"drywet":1}' 30 8` (runs the real GenExpr offline), `START=0 COUNT=60 node tests/sweep.cjs`, `python3 tests/tape_model.py`, `python3 tests/check_render.py <freeze render>`
 - fluxion: `node --test src/multicurve.test.mjs src/mods.test.mjs src/face.test.mjs` (mods and face read `device/Fluxion.maxpat`, so build first)
 - hypna: `node --test tests/*.test.cjs`, `python3 tests/structure.py` (tests reference `device/` loose files — may need the staging paths)
-- materia: `python3 scripts/test_defaults.py`, `node scripts/test_reference.cjs`, `node scripts/test_routing.cjs` (need a build first — read `scripts/build/schema.json`)
-- syzygy: `node tests/control2.test.cjs` (v2); `control.test.cjs` targets v1 source
+- materia: `node scripts/test_es5.cjs`, `python3 scripts/test_defaults.py`, `node scripts/test_reference.cjs`, `node scripts/test_routing.cjs` (need a build first — read `scripts/build/schema.json`)
+- syzygy: `node --test tests/dsp.test.cjs tests/js.test.cjs` (build first; dsp runs the GenExpr offline via `tests/harness.cjs`), `node tests/render.cjs` for offline audition WAVs; v2's `control2.test.cjs` is in `legacy/v2/tests/`
 - vermiform: `node scripts/test_control.cjs`
 - vril: `python3 scripts/check_build.py`, `node --test scripts/test_control.cjs`, `node scripts/check_dsp.cjs` (needs local Max install + `clang++`)
 

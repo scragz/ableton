@@ -3,16 +3,20 @@
 Usage: python3 scripts/build.py
 """
 import sys
+
 sys.dont_write_bytecode = True
 import json
 import struct
 from pathlib import Path
+
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'src'))
 sys.path.insert(0,str(ROOT.parent/'theme'))
-from parameters import P
 from engine import code
+from parameters import P
+
 import theme as T  # shared device theme
+
 V=dict(major=9,minor=0,revision=9,architecture='x64',modernui=1)
 
 def genpatch(source):
@@ -60,7 +64,7 @@ def patch():
         obj('b_'+key,'t b');wire(key,'b_'+key)
         box('m_'+key,'message',[1100,540,80,20],text=key,numinlets=2,numoutlets=1)
         wire('b_'+key,'m_'+key);wire('m_'+key,'control')
-    obj('control','v8 vril.control.js',20,240,varname='control')
+    obj('control','js vril.control.js',20,240,varname='control')
     obj('dsp','gen~',240,240,ni=2,no=2,varname='dsp',patcher=genpatch(code()),outlettype=['signal','signal'])
     wire('control','dsp')
     obj('audioin','plugin~',240,200,ni=2,no=2);obj('audioout','plugout~',240,280,ni=2,no=2)

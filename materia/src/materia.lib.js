@@ -37,7 +37,9 @@ var Materia = (function () {
   function dfs(n){color[n]=1;edges[n].forEach(function(e){if(color[e.to]===1)flags[e.key]=1;else if(color[e.to]===0)dfs(e.to);});color[n]=2;}
   nodes.forEach(function(n){if(!color[n])dfs(n);});return flags;
  }
- function clearState(s,mode){var a=s.slice();if(mode===2)return Array(320).fill(0);if(mode===1){for(var i=0;i<132;i++)a[i]=0;}return a;}
- return {counts:counts,offsets:offsets,lcg:lcg,reverse:reverse,parity:parity,rot:rot,table:table,tables:tables,matrix:matrix,delays:delays,clearState:clearState};
+ // Classic `js` is ES5: no Array.prototype.fill.
+ function zeros(n){var a=[];for(var i=0;i<n;i++)a.push(0);return a;}
+ function clearState(s,mode){var a=s.slice();if(mode===2)return zeros(320);if(mode===1){for(var i=0;i<132;i++)a[i]=0;}return a;}
+ return {counts:counts,offsets:offsets,lcg:lcg,reverse:reverse,parity:parity,rot:rot,table:table,tables:tables,matrix:matrix,delays:delays,clearState:clearState,zeros:zeros};
 })();
 if(typeof module!=='undefined')module.exports=Materia;

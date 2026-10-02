@@ -2,7 +2,7 @@
 autowatch=1;inlets=1;outlets=2;
 var params={},stateBuffer=null,exchange=null,tableBuffer=null,matrixBuffer=null,meterBuffer=null;
 var slots=[null,null],customMatrix=[1,2,4,8,16,32,64,128],userTables=[],mappingPaths=['','','',''];
-var pending=null,ready=false,request=1,selectedTab='ADC1',armed=0,observer=null,lastGood=Array(320).fill(0);
+var pending=null,ready=false,request=1,selectedTab='ADC1',armed=0,observer=null,lastGood=Materia.zeros(320);
 var timer=new Task(tick,this),saveTimer=new Task(markDirty,this),mapTask=new Task(finishMapping,this),statusText='';
 SCHEMA.forEach(function(p){params[p.key]=p.default;});
 for(var u=0;u<8;u++){userTables[u]=[];for(var j=0;j<256;j++)userTables[u].push(j);}
@@ -29,7 +29,7 @@ function applyState(d){slots=d.slots||[null,null];customMatrix=d.matrix||customM
 function uploadSlots(){if(!exchange)return;for(var n=0;n<2;n++){if(slots[n])exchange.poke(1,1024+n*320,slots[n]);exchange.poke(1,5+n,slots[n]?1:0);}}
 function store(n){n=Math.floor(n)-1;if(n<0||n>1)return;slots[n]=coherent();uploadSlots();notifyclients();status('Stored S'+(n+1));}
 function recall(n){n=Math.floor(n)-1;if(n<0||n>1||!slots[n]){status('Slot empty');return;}restoreState(slots[n]);notifyclients();status('Recalled S'+(n+1));}
-function clearconfirmed(which){if(which==='all')restoreState(Array(320).fill(0));else send('clear'+which,++request);notifyclients();status(which==='all'?'Machine cleared':'Rostock '+which+' cleared');}
+function clearconfirmed(which){if(which==='all')restoreState(Materia.zeros(320));else send('clear'+which,++request);notifyclients();status(which==='all'?'Machine cleared':'Rostock '+which+' cleared');}
 function markDirty(){if(ready)notifyclients();}
 function tab(name){selectedTab=String(name);SCHEMA.forEach(function(p){var o=this.patcher.getnamed(p.key),label=this.patcher.getnamed('label_'+p.key);var vis=p.tab===selectedTab || ['da_src','db_src','da_gain','db_gain'].indexOf(p.key)>=0;o.message('hidden',vis?0:1);if(label)label.message('hidden',vis?0:1);},this);
  ['matrixgrid','tableedit','importbutton','store1','store2','recall1','recall2','clearall','clearros1','clearros2','map1','map2','map3','map4','unmap1','unmap2','unmap3','unmap4'].forEach(function(k){var o=this.patcher.getnamed(k);if(!o)return;var show=(k==='matrixgrid'&&name==='MTX')||((k==='tableedit'||k==='importbutton')&&name==='JEN')||(/^(store|recall|clearall)/.test(k)&&name==='STATE')||(k==='clearros1'&&name==='ROS1')||(k==='clearros2'&&name==='ROS2')||(/^(map|unmap)/.test(k)&&name==='TAP'+k.slice(-1));o.message('hidden',show?0:1);},this);view('tab',name);}
