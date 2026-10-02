@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEST = ROOT / 'device'
 VERSION = dict(major=9, minor=0, revision=0, architecture='x64', modernui=1)
 import sys
-sys.path.insert(0, str(ROOT.parent / 'theme'))
+sys.path.insert(0, str(ROOT.parents[2] / 'theme'))  # legacy/v2 -> max/theme
 import theme as T  # noqa: E402  shared device theme
 BOXES, LINES, PARAMETERS = [], [], {}
 

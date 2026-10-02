@@ -1,0 +1,613 @@
+// Syzygy 3: a gravitational three-body simulation that plays three modal resonators.
+// Sun, Earth and Moon orbit each other (softened Newtonian gravity, symplectic Euler, one step
+// per sample). Collinear moments (syzygies) strike them, closeness sets how much energy they
+// trade, the potential well bends their pitch (Tide), speed bows them, and position pans,
+// delays (Doppler) and darkens them.
+// No functions: all 24 modes run in one loop with their state in Data, so every mode owns its
+// state and tests/harness.cjs can translate the source mechanically.
+
+Param f1(130.81, min=8, max=12000);
+Param f2(196, min=8, max=12000);
+Param f3(261.63, min=8, max=12000);
+Param mass1(1, min=0.25, max=4);
+Param mass2(1, min=0.25, max=4);
+Param mass3(1, min=0.25, max=4);
+Param matter1(0.8, min=0, max=1);
+Param matter2(0.6, min=0, max=1);
+Param matter3(0.3, min=0, max=1);
+Param level1(0.8, min=0, max=1);
+Param level2(0.8, min=0, max=1);
+Param level3(0.8, min=0, max=1);
+Param s1(0, min=0, max=1000000);
+Param s2(0, min=0, max=1000000);
+Param s3(0, min=0, max=1000000);
+Param v1(0.8, min=0, max=1);
+Param v2(0.8, min=0, max=1);
+Param v3(0.8, min=0, max=1);
+Param oform(0, min=0, max=3);
+Param launch(0, min=0, max=1000000);
+Param ohold(0, min=0, max=1);
+Param orate(0.2, min=0.01, max=10);
+Param chaos(0.1, min=0, max=1);
+Param gravity(0.35, min=0, max=1);
+Param tide(0.2, min=0, max=1);
+Param mallet(0.5, min=0, max=1);
+Param strikepos(0.3, min=0, max=1);
+Param bow(0, min=0, max=1);
+Param syzalign(0, min=0, max=1);
+Param decay(2.5, min=0.05, max=30);
+Param bright(0.55, min=0, max=1);
+Param feed(0, min=0, max=1);
+Param space(0.3, min=0, max=1);
+Param width(0.8, min=0, max=1);
+Param doppler(0.3, min=0, max=1);
+Param outdb(-6, min=-70, max=6);
+Param grab(0, min=0, max=3);
+Param gx(0, min=-2, max=2);
+Param gy(0, min=-2, max=2);
+Param inamt(0, min=0, max=1);
+
+Data mat(48, 3);
+Data modes(24, 5);
+Buffer view;
+Delay dop1(24000);
+Delay dop2(24000);
+Delay dop3(24000);
+Delay fdn1(24000);
+Delay fdn2(24000);
+Delay fdn3(24000);
+Delay fdn4(24000);
+
+History ready(0);
+History lastLaunch(0);
+History needE0(0);
+History e0(-1.29);
+History px1(0);
+History py1(0);
+History px2(0);
+History py2(0);
+History px3(0);
+History py3(0);
+History vx1(0);
+History vy1(0);
+History vx2(0);
+History vy2(0);
+History vx3(0);
+History vy3(0);
+History fx1(0);
+History fy1(0);
+History fx2(0);
+History fy2(0);
+History fx3(0);
+History fy3(0);
+History ref1(0);
+History ref2(0);
+History ref3(0);
+History armed(0);
+History syzCount(0);
+History syzMid(0);
+History cool(0);
+History t12(0);
+History t13(0);
+History t23(0);
+History ls1(0);
+History ls2(0);
+History ls3(0);
+History pc1(1000000);
+History pc2(1000000);
+History pc3(1000000);
+History pn1(2);
+History pn2(2);
+History pn3(2);
+History pa1(0);
+History pa2(0);
+History pa3(0);
+History ck1(0);
+History ck2(0);
+History ck3(0);
+History yb1(0);
+History yb2(0);
+History yb3(0);
+History qb1(0);
+History qb2(0);
+History qb3(0);
+History env1(0);
+History env2(0);
+History env3(0);
+History energy(0);
+History smF1(130.81);
+History smF2(196);
+History smF3(261.63);
+History smL1(0.8);
+History smL2(0.8);
+History smL3(0.8);
+History smDecay(2.5);
+History smBright(0.55);
+History smGrav(0.35);
+History smFeed(0);
+History smBow(0);
+History smSpace(0.3);
+History smWidth(0.8);
+History smDop(0.3);
+History smOut(0.5);
+History tick(0);
+History vtick(0);
+History alp1(0);
+History alp2(0);
+History alp3(0);
+History h1(0);
+History h2(0);
+History h3(0);
+History h4(0);
+History lfo(0);
+History ak1(0);
+History ak2(0);
+History ak3(0);
+History gl1(0);
+History gl2(0);
+History gl3(0);
+History gr1(0);
+History gr2(0);
+History gr3(0);
+History fg1(0);
+History fg2(0);
+History fg3(0);
+History fg4(0);
+
+// ---- once: material tables (log2 ratio, decay multiplier, gain), 8 modes each ----
+// 0 Skin (membrane), 1 Wood (free bar), 2 String, 3 Glass, 4 Bell, 5 Gong.
+if (ready == 0) {
+    poke(mat, log2(1), 0, 0); poke(mat, 0.35, 0, 1); poke(mat, 1, 0, 2);
+    poke(mat, log2(1.594), 1, 0); poke(mat, 0.25, 1, 1); poke(mat, 0.7, 1, 2);
+    poke(mat, log2(2.136), 2, 0); poke(mat, 0.2, 2, 1); poke(mat, 0.55, 2, 2);
+    poke(mat, log2(2.296), 3, 0); poke(mat, 0.18, 3, 1); poke(mat, 0.45, 3, 2);
+    poke(mat, log2(2.653), 4, 0); poke(mat, 0.15, 4, 1); poke(mat, 0.4, 4, 2);
+    poke(mat, log2(2.918), 5, 0); poke(mat, 0.13, 5, 1); poke(mat, 0.3, 5, 2);
+    poke(mat, log2(3.156), 6, 0); poke(mat, 0.12, 6, 1); poke(mat, 0.25, 6, 2);
+    poke(mat, log2(3.501), 7, 0); poke(mat, 0.1, 7, 1); poke(mat, 0.2, 7, 2);
+
+    poke(mat, log2(1), 8, 0); poke(mat, 0.5, 8, 1); poke(mat, 1, 8, 2);
+    poke(mat, log2(2.756), 9, 0); poke(mat, 0.2, 9, 1); poke(mat, 0.5, 9, 2);
+    poke(mat, log2(5.404), 10, 0); poke(mat, 0.1, 10, 1); poke(mat, 0.3, 10, 2);
+    poke(mat, log2(8.933), 11, 0); poke(mat, 0.06, 11, 1); poke(mat, 0.2, 11, 2);
+    poke(mat, log2(13.345), 12, 0); poke(mat, 0.04, 12, 1); poke(mat, 0.12, 12, 2);
+    poke(mat, log2(18.638), 13, 0); poke(mat, 0.03, 13, 1); poke(mat, 0.08, 13, 2);
+    poke(mat, log2(24.81), 14, 0); poke(mat, 0.02, 14, 1); poke(mat, 0.05, 14, 2);
+    poke(mat, log2(31.87), 15, 0); poke(mat, 0.015, 15, 1); poke(mat, 0.03, 15, 2);
+
+    poke(mat, log2(1), 16, 0); poke(mat, 1, 16, 1); poke(mat, 1, 16, 2);
+    poke(mat, log2(2), 17, 0); poke(mat, 0.8, 17, 1); poke(mat, 0.5, 17, 2);
+    poke(mat, log2(3), 18, 0); poke(mat, 0.65, 18, 1); poke(mat, 0.33, 18, 2);
+    poke(mat, log2(4), 19, 0); poke(mat, 0.55, 19, 1); poke(mat, 0.25, 19, 2);
+    poke(mat, log2(5), 20, 0); poke(mat, 0.45, 20, 1); poke(mat, 0.2, 20, 2);
+    poke(mat, log2(6), 21, 0); poke(mat, 0.38, 21, 1); poke(mat, 0.16, 21, 2);
+    poke(mat, log2(7), 22, 0); poke(mat, 0.32, 22, 1); poke(mat, 0.14, 22, 2);
+    poke(mat, log2(8), 23, 0); poke(mat, 0.27, 23, 1); poke(mat, 0.12, 23, 2);
+
+    poke(mat, log2(1), 24, 0); poke(mat, 1.4, 24, 1); poke(mat, 1, 24, 2);
+    poke(mat, log2(2.32), 25, 0); poke(mat, 0.9, 25, 1); poke(mat, 0.45, 25, 2);
+    poke(mat, log2(4.25), 26, 0); poke(mat, 0.6, 26, 1); poke(mat, 0.3, 26, 2);
+    poke(mat, log2(6.63), 27, 0); poke(mat, 0.4, 27, 1); poke(mat, 0.2, 27, 2);
+    poke(mat, log2(9.38), 28, 0); poke(mat, 0.28, 28, 1); poke(mat, 0.14, 28, 2);
+    poke(mat, log2(12.46), 29, 0); poke(mat, 0.2, 29, 1); poke(mat, 0.1, 29, 2);
+    poke(mat, log2(15.9), 30, 0); poke(mat, 0.14, 30, 1); poke(mat, 0.07, 30, 2);
+    poke(mat, log2(19.6), 31, 0); poke(mat, 0.1, 31, 1); poke(mat, 0.05, 31, 2);
+
+    poke(mat, log2(0.5), 32, 0); poke(mat, 2, 32, 1); poke(mat, 0.6, 32, 2);
+    poke(mat, log2(1), 33, 0); poke(mat, 1.2, 33, 1); poke(mat, 1, 33, 2);
+    poke(mat, log2(1.183), 34, 0); poke(mat, 1, 34, 1); poke(mat, 0.7, 34, 2);
+    poke(mat, log2(1.506), 35, 0); poke(mat, 0.8, 35, 1); poke(mat, 0.4, 35, 2);
+    poke(mat, log2(2.0), 36, 0); poke(mat, 0.9, 36, 1); poke(mat, 0.6, 36, 2);
+    poke(mat, log2(2.514), 37, 0); poke(mat, 0.6, 37, 1); poke(mat, 0.35, 37, 2);
+    poke(mat, log2(2.662), 38, 0); poke(mat, 0.55, 38, 1); poke(mat, 0.3, 38, 2);
+    poke(mat, log2(3.011), 39, 0); poke(mat, 0.4, 39, 1); poke(mat, 0.25, 39, 2);
+
+    poke(mat, log2(1), 40, 0); poke(mat, 1.8, 40, 1); poke(mat, 1, 40, 2);
+    poke(mat, log2(1.47), 41, 0); poke(mat, 1.5, 41, 1); poke(mat, 0.8, 41, 2);
+    poke(mat, log2(2.09), 42, 0); poke(mat, 1.3, 42, 1); poke(mat, 0.7, 42, 2);
+    poke(mat, log2(2.56), 43, 0); poke(mat, 1.1, 43, 1); poke(mat, 0.6, 43, 2);
+    poke(mat, log2(3.14), 44, 0); poke(mat, 1.0, 44, 1); poke(mat, 0.55, 44, 2);
+    poke(mat, log2(3.76), 45, 0); poke(mat, 0.9, 45, 1); poke(mat, 0.5, 45, 2);
+    poke(mat, log2(4.18), 46, 0); poke(mat, 0.8, 46, 1); poke(mat, 0.45, 46, 2);
+    poke(mat, log2(4.84), 47, 0); poke(mat, 0.7, 47, 1); poke(mat, 0.4, 47, 2);
+
+    // Parameters are not reset with the state, so a gen~ reset must not replay a strike.
+    ls1 = s1; ls2 = s2; ls3 = s3;
+    smL1 = level1; smL2 = level2; smL3 = level3; smDecay = decay; smBright = bright; smGrav = gravity;
+    smFeed = feed; smBow = bow; smSpace = space; smWidth = width; smDop = doppler; smOut = dbtoa(outdb);
+    smF1 = f1; smF2 = f2; smF3 = f3;
+    lastLaunch = launch - 1;
+}
+
+// ---- smoothing ----
+fast = 1 - exp(-1 / (samplerate * 0.004));
+slew = 1 - exp(-1 / (samplerate * 0.03));
+slow = 1 - exp(-1 / (samplerate * 0.25));
+smL1 += (level1 - smL1) * slew;
+smL2 += (level2 - smL2) * slew;
+smL3 += (level3 - smL3) * slew;
+smDecay += (decay - smDecay) * slew;
+smBright += (bright - smBright) * slew;
+smGrav += (gravity - smGrav) * slow;
+smFeed += (feed - smFeed) * slow;
+smBow += (bow - smBow) * slow;
+smSpace += (space - smSpace) * slow;
+smWidth += (width - smWidth) * slew;
+smDop += (doppler - smDop) * slow;
+smOut += (dbtoa(outdb) * (outdb > -69.5) - smOut) * slew;
+
+// ---- launch a form: 0 Figure-8, 1 Lagrange triangle, 2 Euler line, 3 Swarm ----
+if (launch != lastLaunch) {
+    lastLaunch = launch;
+    fm = floor(oform + 0.5);
+    if (fm == 0) {
+        px1 = 0.97000436; py1 = -0.24308753; px2 = -0.97000436; py2 = 0.24308753; px3 = 0; py3 = 0;
+        vx1 = 0.466203685; vy1 = 0.43236573; vx2 = 0.466203685; vy2 = 0.43236573;
+        vx3 = -0.93240737; vy3 = -0.86473146;
+    } else if (fm == 1) {
+        px1 = 0; py1 = 0.69282; px2 = -0.6; py2 = -0.34641; px3 = 0.6; py3 = -0.34641;
+        vx1 = -0.91287; vy1 = 0; vx2 = 0.456435; vy2 = -0.790569; vx3 = 0.456435; vy3 = 0.790569;
+    } else if (fm == 2) {
+        px1 = -0.9; py1 = 0; px2 = 0; py2 = 0; px3 = 0.9; py3 = 0;
+        vx1 = 0; vy1 = -1.178511; vx2 = 0; vy2 = 0; vx3 = 0; vy3 = 1.178511;
+    } else {
+        px1 = noise() * 0.9; py1 = noise() * 0.9; px2 = noise() * 0.9; py2 = noise() * 0.9; px3 = noise() * 0.9; py3 = noise() * 0.9;
+        vx1 = noise() * 0.6; vy1 = noise() * 0.6; vx2 = noise() * 0.6; vy2 = noise() * 0.6; vx3 = noise() * 0.6; vy3 = noise() * 0.6;
+    }
+    // Zero total momentum and centre of mass for whatever masses are set.
+    mt = mass1 + mass2 + mass3;
+    cvx = (mass1 * vx1 + mass2 * vx2 + mass3 * vx3) / mt;
+    cvy = (mass1 * vy1 + mass2 * vy2 + mass3 * vy3) / mt;
+    ccx = (mass1 * px1 + mass2 * px2 + mass3 * px3) / mt;
+    ccy = (mass1 * py1 + mass2 * py2 + mass3 * py3) / mt;
+    vx1 -= cvx; vx2 -= cvx; vx3 -= cvx; vy1 -= cvy; vy2 -= cvy; vy3 -= cvy;
+    px1 -= ccx; px2 -= ccx; px3 -= ccx; py1 -= ccy; py2 -= ccy; py3 -= ccy;
+    needE0 = 1;
+    armed = 0;
+}
+
+// ---- gravity (softened), wall, chaos, thermostat ----
+dt = (1 - ohold) * orate * 6.32591 / samplerate;
+dx12 = px2 - px1; dy12 = py2 - py1;
+dx13 = px3 - px1; dy13 = py3 - py1;
+dx23 = px3 - px2; dy23 = py3 - py2;
+q12 = dx12 * dx12 + dy12 * dy12;
+q13 = dx13 * dx13 + dy13 * dy13;
+q23 = dx23 * dx23 + dy23 * dy23;
+i12 = 1 / sqrt(q12 + 0.001);
+i13 = 1 / sqrt(q13 + 0.001);
+i23 = 1 / sqrt(q23 + 0.001);
+k12 = i12 * i12 * i12;
+k13 = i13 * i13 * i13;
+k23 = i23 * i23 * i23;
+ax1 = mass2 * dx12 * k12 + mass3 * dx13 * k13;
+ay1 = mass2 * dy12 * k12 + mass3 * dy13 * k13;
+ax2 = mass3 * dx23 * k23 - mass1 * dx12 * k12;
+ay2 = mass3 * dy23 * k23 - mass1 * dy12 * k12;
+ax3 = 0 - mass1 * dx13 * k13 - mass2 * dx23 * k23;
+ay3 = 0 - mass1 * dy13 * k13 - mass2 * dy23 * k23;
+// Contact: bodies are 0.12 across, so an overlapping pair pushes apart. Without this, a close
+// pass could leave all three trapped in the softened core, whirling in a clump forever.
+d12 = sqrt(q12); d13 = sqrt(q13); d23 = sqrt(q23);
+o12 = 20000 * max(0, 0.12 - d12) / (d12 + 0.000001);
+o13 = 20000 * max(0, 0.12 - d13) / (d13 + 0.000001);
+o23 = 20000 * max(0, 0.12 - d23) / (d23 + 0.000001);
+ax1 -= (o12 * dx12 + o13 * dx13) / mass1; ay1 -= (o12 * dy12 + o13 * dy13) / mass1;
+ax2 += (o12 * dx12 - o23 * dx23) / mass2; ay2 += (o12 * dy12 - o23 * dy23) / mass2;
+ax3 += (o13 * dx13 + o23 * dx23) / mass3; ay3 += (o13 * dy13 + o23 * dy23) / mass3;
+// Stiff wall at radius 1.6 so nothing escapes.
+rr1 = sqrt(px1 * px1 + py1 * py1) + 0.000001;
+rr2 = sqrt(px2 * px2 + py2 * py2) + 0.000001;
+rr3 = sqrt(px3 * px3 + py3 * py3) + 0.000001;
+w1 = 120 * max(0, rr1 - 1.6) / rr1;
+w2 = 120 * max(0, rr2 - 1.6) / rr2;
+w3 = 120 * max(0, rr3 - 1.6) / rr3;
+ax1 -= w1 * px1; ay1 -= w1 * py1;
+ax2 -= w2 * px2; ay2 -= w2 * py2;
+ax3 -= w3 * px3; ay3 -= w3 * py3;
+// Chaos: slowly wandering random forces, correlated over about half an orbit-time unit.
+fk = min(1, dt * 2);
+fx1 += (noise() - fx1) * fk; fy1 += (noise() - fy1) * fk;
+fx2 += (noise() - fx2) * fk; fy2 += (noise() - fy2) * fk;
+fx3 += (noise() - fx3) * fk; fy3 += (noise() - fy3) * fk;
+chf = chaos * chaos * 3;
+ax1 += fx1 * chf; ay1 += fy1 * chf;
+ax2 += fx2 * chf; ay2 += fy2 * chf;
+ax3 += fx3 * chf; ay3 += fy3 * chf;
+// Thermostat: pull total energy back toward the launch energy (weaker as Chaos rises).
+ke = 0.5 * (mass1 * (vx1 * vx1 + vy1 * vy1) + mass2 * (vx2 * vx2 + vy2 * vy2) + mass3 * (vx3 * vx3 + vy3 * vy3));
+pairs = (mass1 * mass2 + mass1 * mass3 + mass2 * mass3) / 3;
+pe = 0 - (mass1 * mass2 * i12 + mass1 * mass3 * i13 + mass2 * mass3 * i23);
+if (needE0 > 0) { e0 = (ke + pe) / pairs; }
+etot = ke + pe;
+therm = clamp((0.08 + 0.7 * (1 - chaos)) * (e0 * pairs - etot) / max(ke, 0.05), -3, 3) * dt;
+vx1 = (vx1 + ax1 * dt) * (1 + therm); vy1 = (vy1 + ay1 * dt) * (1 + therm);
+vx2 = (vx2 + ax2 * dt) * (1 + therm); vy2 = (vy2 + ay2 * dt) * (1 + therm);
+vx3 = (vx3 + ax3 * dt) * (1 + therm); vy3 = (vy3 + ay3 * dt) * (1 + therm);
+// Speed limit: close passes with a heavy body would otherwise slingshot a light one into the wall.
+vc1 = min(1, 6 / (sqrt(vx1 * vx1 + vy1 * vy1) + 0.000001)); vx1 *= vc1; vy1 *= vc1;
+vc2 = min(1, 6 / (sqrt(vx2 * vx2 + vy2 * vy2) + 0.000001)); vx2 *= vc2; vy2 *= vc2;
+vc3 = min(1, 6 / (sqrt(vx3 * vx3 + vy3 * vy3) + 0.000001)); vx3 *= vc3; vy3 *= vc3;
+// Bleed off net momentum and centre-of-mass drift (throws and chaos add both).
+mt = mass1 + mass2 + mass3;
+cvx = (mass1 * vx1 + mass2 * vx2 + mass3 * vx3) / mt;
+cvy = (mass1 * vy1 + mass2 * vy2 + mass3 * vy3) / mt;
+mk = min(1, dt * 0.5);
+vx1 -= cvx * mk; vx2 -= cvx * mk; vx3 -= cvx * mk;
+vy1 -= cvy * mk; vy2 -= cvy * mk; vy3 -= cvy * mk;
+px1 += vx1 * dt; py1 += vy1 * dt;
+px2 += vx2 * dt; py2 += vy2 * dt;
+px3 += vx3 * dt; py3 += vy3 * dt;
+ccx = (mass1 * px1 + mass2 * px2 + mass3 * px3) / mt * min(1, dt * 0.2);
+ccy = (mass1 * py1 + mass2 * py2 + mass3 * py3) / mt * min(1, dt * 0.2);
+px1 -= ccx; px2 -= ccx; px3 -= ccx;
+py1 -= ccy; py2 -= ccy; py3 -= ccy;
+// Grab: the held body follows the mouse in real time; letting go keeps its velocity (a throw).
+gs = 1 - exp(-1 / (samplerate * 0.015));
+gb = floor(grab + 0.5);
+gnx = 0; gny = 0;
+if (gb == 1) {
+    gnx = px1 + (gx - px1) * gs; gny = py1 + (gy - py1) * gs;
+    if (dt > 0.0000001) { vx1 = clamp((gnx - px1) / dt, -2.5, 2.5); vy1 = clamp((gny - py1) / dt, -2.5, 2.5); }
+    px1 = gnx; py1 = gny;
+} else if (gb == 2) {
+    gnx = px2 + (gx - px2) * gs; gny = py2 + (gy - py2) * gs;
+    if (dt > 0.0000001) { vx2 = clamp((gnx - px2) / dt, -2.5, 2.5); vy2 = clamp((gny - py2) / dt, -2.5, 2.5); }
+    px2 = gnx; py2 = gny;
+} else if (gb == 3) {
+    gnx = px3 + (gx - px3) * gs; gny = py3 + (gy - py3) * gs;
+    if (dt > 0.0000001) { vx3 = clamp((gnx - px3) / dt, -2.5, 2.5); vy3 = clamp((gny - py3) / dt, -2.5, 2.5); }
+    px3 = gnx; py3 = gny;
+}
+px1 = fixdenorm(px1); py1 = fixdenorm(py1); px2 = fixdenorm(px2); py2 = fixdenorm(py2); px3 = fixdenorm(px3); py3 = fixdenorm(py3);
+
+// ---- what the orbit means to the sound ----
+sp1 = sqrt(vx1 * vx1 + vy1 * vy1);
+sp2 = sqrt(vx2 * vx2 + vy2 * vy2);
+sp3 = sqrt(vx3 * vx3 + vy3 * vy3);
+// Tide: gravitational redshift. A body deeper in the well than its recent average drops in pitch.
+phi1 = 0 - (mass2 * i12 + mass3 * i13);
+phi2 = 0 - (mass1 * i12 + mass3 * i23);
+phi3 = 0 - (mass1 * i13 + mass2 * i23);
+rk = needE0 > 0 ? 1 : min(1, dt * 0.15);
+needE0 = 0;
+ref1 += (phi1 - ref1) * rk;
+ref2 += (phi2 - ref2) * rk;
+ref3 += (phi3 - ref3) * rk;
+st1 = tide * 12 * tanh(0.6 * (phi1 - ref1));
+st2 = tide * 12 * tanh(0.6 * (phi2 - ref2));
+st3 = tide * 12 * tanh(0.6 * (phi3 - ref3));
+// Syzygy: the three bodies in a line. col is 0 when collinear and 1 for an equilateral triangle.
+crs = dx12 * dy13 - dy12 * dx13;
+col = min(1, abs(crs) / (d12 * d13 + d13 * d23 + d23 * d12 + 0.000001) / 0.288675);
+thr = syzalign * syzalign * 0.3;
+cool = max(0, cool - 1);
+fire = 0;
+if (armed > 0 && col < thr && cool <= 0 && syzalign > 0) {
+    fire = 1;
+    armed = 0;
+    cool = samplerate * 0.06;
+    syzCount = wrap(syzCount + 1, 0, 1000);
+    // The body opposite the longest side is the one in the middle.
+    syzMid = d12 >= d13 && d12 >= d23 ? 3 : (d13 >= d23 ? 2 : 1);
+}
+if (armed == 0 && col > thr * 1.8 + 0.02) { armed = 1; }
+// Collisions knock both bodies (with Align up), harder for faster impacts.
+bump1 = 0; bump2 = 0; bump3 = 0;
+n12 = d12 < 0.12; n13 = d13 < 0.12; n23 = d23 < 0.12;
+if (n12 > 0 && t12 < 1 && syzalign > 0) { iv = clamp(sqrt((vx2 - vx1) * (vx2 - vx1) + (vy2 - vy1) * (vy2 - vy1)) / 3, 0.25, 1); bump1 = max(bump1, iv); bump2 = max(bump2, iv); }
+if (n13 > 0 && t13 < 1 && syzalign > 0) { iv = clamp(sqrt((vx3 - vx1) * (vx3 - vx1) + (vy3 - vy1) * (vy3 - vy1)) / 3, 0.25, 1); bump1 = max(bump1, iv); bump3 = max(bump3, iv); }
+if (n23 > 0 && t23 < 1 && syzalign > 0) { iv = clamp(sqrt((vx3 - vx2) * (vx3 - vx2) + (vy3 - vy2) * (vy3 - vy2)) / 3, 0.25, 1); bump2 = max(bump2, iv); bump3 = max(bump3, iv); }
+t12 = n12; t13 = n13; t23 = n23;
+
+// ---- excitation ----
+hit1 = 0; hit2 = 0; hit3 = 0;
+vel1 = 0; vel2 = 0; vel3 = 0;
+if (s1 != ls1) { ls1 = s1; hit1 = 1; vel1 = v1; }
+if (s2 != ls2) { ls2 = s2; hit2 = 1; vel2 = v2; }
+if (s3 != ls3) { ls3 = s3; hit3 = 1; vel3 = v3; }
+if (bump1 > 0) { hit1 = 1; vel1 = max(vel1, bump1); }
+if (bump2 > 0) { hit2 = 1; vel2 = max(vel2, bump2); }
+if (bump3 > 0) { hit3 = 1; vel3 = max(vel3, bump3); }
+if (fire > 0) {
+    spm = syzMid == 1 ? sp1 : (syzMid == 2 ? sp2 : sp3);
+    sv = 0.45 + 0.5 * clamp(spm / 1.3, 0, 1);
+    hit1 = 1; hit2 = 1; hit3 = 1;
+    vel1 = max(vel1, syzMid == 1 ? sv : sv * 0.4);
+    vel2 = max(vel2, syzMid == 2 ? sv : sv * 0.4);
+    vel3 = max(vel3, syzMid == 3 ? sv : sv * 0.4);
+}
+// Mallet: a half-sine pulse, shorter for harder mallets and louder hits. Its area is normalised
+// so a mode well below 1/length rings at about the hit velocity.
+mlen = mix(0.006, 0.00012, pow(mallet, 0.6));
+if (hit1 > 0) { pn1 = max(2, samplerate * mlen * (1.35 - 0.7 * vel1)); pc1 = 0; pa1 = pow(vel1, 1.5) / (pn1 * 0.63662); ck1 = vel1 * mallet * mallet; }
+if (hit2 > 0) { pn2 = max(2, samplerate * mlen * (1.35 - 0.7 * vel2)); pc2 = 0; pa2 = pow(vel2, 1.5) / (pn2 * 0.63662); ck2 = vel2 * mallet * mallet; }
+if (hit3 > 0) { pn3 = max(2, samplerate * mlen * (1.35 - 0.7 * vel3)); pc3 = 0; pa3 = pow(vel3, 1.5) / (pn3 * 0.63662); ck3 = vel3 * mallet * mallet; }
+ex1 = pc1 < pn1 ? pa1 * sin(pi * pc1 / pn1) : 0;
+ex2 = pc2 < pn2 ? pa2 * sin(pi * pc2 / pn2) : 0;
+ex3 = pc3 < pn3 ? pa3 * sin(pi * pc3 / pn3) : 0;
+pc1 = min(pc1 + 1, 1000000); pc2 = min(pc2 + 1, 1000000); pc3 = min(pc3 + 1, 1000000);
+ckd = exp(-1 / (samplerate * 0.0004));
+ck1 *= ckd; ck2 *= ckd; ck3 *= ckd;
+ex1 += noise() * ck1 * 0.08;
+ex2 += noise() * ck2 * 0.08;
+ex3 += noise() * ck3 * 0.08;
+// Bow: friction noise scaled by each body's orbital speed (normalised to the ring time).
+bnorm = pow(smBow, 1.5) * sqrt(13.8 / (samplerate * smDecay)) * 0.35;
+ex1 += noise() * bnorm * min(sp1 * sp1, 4);
+ex2 += noise() * bnorm * min(sp2 * sp2, 4);
+ex3 += noise() * bnorm * min(sp3 * sp3, 4);
+// Audio input (Syzygy Audio): a soft-clipped mono sum excites all three bodies, normalised to the
+// ring time like the bow. The instrument has nothing connected, so in1/in2 are silent there.
+ext = tanh((in1 + in2) * 0.7) * inamt * inamt * sqrt(13.8 / (samplerate * smDecay)) * 1.5;
+ex1 += ext; ex2 += ext * 0.9; ex3 += ext * 0.8;
+// Feed: each body hears itself through a soft clip; its own level turns the loop down.
+// The loop taps the modes' real parts, which are in phase with their input at resonance.
+reg = 1 / (1 + energy * 40);
+fdk = smFeed * smFeed * 0.0015;
+ex1 += fdk * tanh(qb1 * 3) / (1 + env1 * env1 * 40);
+ex2 += fdk * tanh(qb2 * 3) / (1 + env2 * env2 * 40);
+ex3 += fdk * tanh(qb3 * 3) / (1 + env3 * env3 * 40);
+// Gravity: bodies trade energy in proportion to mass over squared distance.
+gk = smGrav * smGrav * 0.0007 * reg;
+c12 = 1.2 / (q12 + 0.25);
+c13 = 1.2 / (q13 + 0.25);
+c23 = 1.2 / (q23 + 0.25);
+ex1 += gk * (mass2 * c12 * tanh(qb2 * 2) + mass3 * c13 * tanh(qb3 * 2));
+ex2 += gk * (mass1 * c12 * tanh(qb1 * 2) + mass3 * c23 * tanh(qb3 * 2));
+ex3 += gk * (mass1 * c13 * tanh(qb1 * 2) + mass2 * c23 * tanh(qb2 * 2));
+// ...and, whatever their tuning, bleed energy into each other as friction noise when close.
+gn = smGrav * smGrav * 3 * sqrt(13.8 / (samplerate * smDecay)) * reg;
+ex1 += noise() * gn * min(mass2 * c12 * env2 + mass3 * c13 * env3, 6);
+ex2 += noise() * gn * min(mass1 * c12 * env1 + mass3 * c23 * env3, 6);
+ex3 += noise() * gn * min(mass1 * c13 * env1 + mass2 * c23 * env2, 6);
+
+// ---- 24 modes: 8 per body. Coefficients refresh every 32 samples and on every strike. ----
+smF1 += (f1 * exp2(st1 / 12) - smF1) * fast;
+smF2 += (f2 * exp2(st2 / 12) - smF2) * fast;
+smF3 += (f3 * exp2(st3 / 12) - smF3) * fast;
+tick = wrap(tick + 1, 0, 32);
+upd = tick < 1 || hit1 > 0 || hit2 > 0 || hit3 > 0 || ready == 0;
+tilt = (smBright - 0.5) * 1.6;
+hfd = (1 - smBright) * 0.25;
+pp = 0.03 + strikepos * 0.47;
+nyq = samplerate * 0.45;
+o1 = 0; o2 = 0; o3 = 0;
+u1 = 0; u2 = 0; u3 = 0;
+for (i = 0; i < 24; i += 1) {
+    b = floor(i / 8);
+    k = i - b * 8;
+    if (upd) {
+        fb = b < 1 ? smF1 : (b < 2 ? smF2 : smF3);
+        mm = (b < 1 ? matter1 : (b < 2 ? matter2 : matter3)) * 5;
+        mi = min(floor(mm), 4);
+        mf = mm - mi;
+        ra = mi * 8 + k;
+        rb = ra + 8;
+        ratio = exp2(mix(peek(mat, ra, 0), peek(mat, rb, 0), mf));
+        hz = fb * ratio;
+        t60 = smDecay * mix(peek(mat, ra, 1), peek(mat, rb, 1), mf) / (1 + hfd * (ratio - 1));
+        gg = mix(peek(mat, ra, 2), peek(mat, rb, 2), mf) * pow(ratio, tilt) * (0.35 + 0.65 * abs(sin(pi * (k + 1) * pp)));
+        gg = hz < nyq && hz > 16 ? gg : 0;
+        w = twopi * min(hz, nyq) / samplerate;
+        rad = exp(-6.907755 / (samplerate * max(t60, 0.01)));
+        poke(modes, rad * cos(w), i, 2);
+        poke(modes, rad * sin(w), i, 3);
+        poke(modes, gg, i, 4);
+    }
+    xin = b < 1 ? ex1 : (b < 2 ? ex2 : ex3);
+    re = peek(modes, i, 0);
+    im = peek(modes, i, 1);
+    co = peek(modes, i, 2);
+    si = peek(modes, i, 3);
+    nre = co * re - si * im + xin;
+    nim = si * re + co * im;
+    poke(modes, fixdenorm(nre), i, 0);
+    poke(modes, fixdenorm(nim), i, 1);
+    gm = peek(modes, i, 4);
+    yv = nim * gm;
+    uv = nre * gm;
+    u1 += b < 1 ? uv : 0;
+    u2 += b > 0 && b < 2 ? uv : 0;
+    u3 += b > 1 ? uv : 0;
+    o1 += b < 1 ? yv : 0;
+    o2 += b > 0 && b < 2 ? yv : 0;
+    o3 += b > 1 ? yv : 0;
+}
+yb1 = dcblock(o1);
+yb2 = dcblock(o2);
+yb3 = dcblock(o3);
+qb1 = u1;
+qb2 = u2;
+qb3 = u3;
+ea = 1 - exp(-1 / (samplerate * 0.003));
+er = 1 - exp(-1 / (samplerate * 0.25));
+env1 += (abs(yb1) - env1) * (abs(yb1) > env1 ? ea : er);
+env2 += (abs(yb2) - env2) * (abs(yb2) > env2 ? ea : er);
+env3 += (abs(yb3) - env3) * (abs(yb3) > env3 ? ea : er);
+inst = (yb1 * yb1 + yb2 * yb2 + yb3 * yb3) / 3;
+energy += (inst - energy) * (inst > energy ? ea : 1 - exp(-1 / (samplerate * 0.6)));
+
+// ---- placement: a listener in front of the orbit plane at (0, -2.4) ----
+dl1 = sqrt(px1 * px1 + (py1 + 2.4) * (py1 + 2.4));
+dl2 = sqrt(px2 * px2 + (py2 + 2.4) * (py2 + 2.4));
+dl3 = sqrt(px3 * px3 + (py3 + 2.4) * (py3 + 2.4));
+dd = smDop * 0.025 * samplerate;
+a1 = dop1.read(clamp(dd * dl1, 1, 23990), interp="linear");
+a2 = dop2.read(clamp(dd * dl2, 1, 23990), interp="linear");
+a3 = dop3.read(clamp(dd * dl3, 1, 23990), interp="linear");
+dop1.write(yb1 * smL1);
+dop2.write(yb2 * smL2);
+dop3.write(yb3 * smL3);
+// Air, level and pan move with the orbit; refresh them with the mode coefficients.
+if (tick < 1) {
+    n1 = clamp(2.4 / dl1, 0.3, 1.6);
+    n2 = clamp(2.4 / dl2, 0.3, 1.6);
+    n3 = clamp(2.4 / dl3, 0.3, 1.6);
+    ak1 = 1 - exp(-twopi * min(nyq, 16000 * n1 * n1) / samplerate);
+    ak2 = 1 - exp(-twopi * min(nyq, 16000 * n2 * n2) / samplerate);
+    ak3 = 1 - exp(-twopi * min(nyq, 16000 * n3 * n3) / samplerate);
+    pan1 = clamp(0.5 + 0.5 * smWidth * px1 / 1.3, 0, 1);
+    pan2 = clamp(0.5 + 0.5 * smWidth * px2 / 1.3, 0, 1);
+    pan3 = clamp(0.5 + 0.5 * smWidth * px3 / 1.3, 0, 1);
+    gl1 = pow(n1, 0.7) * cos(pan1 * halfpi) * 0.7; gr1 = pow(n1, 0.7) * sin(pan1 * halfpi) * 0.7;
+    gl2 = pow(n2, 0.7) * cos(pan2 * halfpi) * 0.7; gr2 = pow(n2, 0.7) * sin(pan2 * halfpi) * 0.7;
+    gl3 = pow(n3, 0.7) * cos(pan3 * halfpi) * 0.7; gr3 = pow(n3, 0.7) * sin(pan3 * halfpi) * 0.7;
+}
+alp1 += (a1 - alp1) * ak1;
+alp2 += (a2 - alp2) * ak2;
+alp3 += (a3 - alp3) * ak3;
+dryL = alp1 * gl1 + alp2 * gl2 + alp3 * gl3;
+dryR = alp1 * gr1 + alp2 * gr2 + alp3 * gr3;
+
+// ---- Space: four-line feedback delay network, Hadamard mix, damped and slowly modulated ----
+lfo = wrap(lfo + 0.13 / samplerate, 0, 1);
+sz = (0.45 + smSpace * 0.9) * samplerate;
+wob = sin(lfo * twopi) * 0.0004 * samplerate;
+t1 = 0.0317 * sz + wob;
+t2 = 0.0413 * sz - wob;
+t3 = 0.0539 * sz + wob * 0.7;
+t4 = 0.0671 * sz - wob * 0.7;
+r1 = fdn1.read(clamp(t1, 2, 23990), interp="linear");
+r2 = fdn2.read(clamp(t2, 2, 23990), interp="linear");
+r3 = fdn3.read(clamp(t3, 2, 23990), interp="linear");
+r4 = fdn4.read(clamp(t4, 2, 23990), interp="linear");
+if (tick < 1) {
+    rt = (0.4 + smSpace * 7) * samplerate;
+    fg1 = pow(10, -3 * 0.0317 * sz / rt);
+    fg2 = pow(10, -3 * 0.0413 * sz / rt);
+    fg3 = pow(10, -3 * 0.0539 * sz / rt);
+    fg4 = pow(10, -3 * 0.0671 * sz / rt);
+}
+dmp = 1 - exp(-twopi * 4200 / samplerate);
+h1 += (r1 - h1) * dmp; h2 += (r2 - h2) * dmp; h3 += (r3 - h3) * dmp; h4 += (r4 - h4) * dmp;
+za = h1 * fg1;
+zb = h2 * fg2;
+zc = h3 * fg3;
+zd = h4 * fg4;
+fdn1.write(fixdenorm((za + zb + zc + zd) * 0.5 + dryL * 0.5));
+fdn2.write(fixdenorm((za - zb + zc - zd) * 0.5 + dryR * 0.5));
+fdn3.write(fixdenorm((za + zb - zc - zd) * 0.5 - dryL * 0.5));
+fdn4.write(fixdenorm((za - zb - zc + zd) * 0.5 - dryR * 0.5));
+wet = smSpace * 0.8;
+mixL = dcblock(dryL + (r1 * 0.7 + r3 * 0.4) * wet);
+mixR = dcblock(dryR + (r2 * 0.7 + r4 * 0.4) * wet);
+
+// ---- output: soft ceiling at 0.97 ----
+out1 = 0.97 * tanh(mixL * smOut / 0.97);
+out2 = 0.97 * tanh(mixR * smOut / 0.97);
+
+// ---- display state for the panels (every 64 samples) ----
+vtick = wrap(vtick + 1, 0, 64);
+if (vtick < 1 && dim(view) >= 32) {
+    poke(view, px1, 0, 0); poke(view, py1, 1, 0);
+    poke(view, px2, 2, 0); poke(view, py2, 3, 0);
+    poke(view, px3, 4, 0); poke(view, py3, 5, 0);
+    poke(view, env1, 6, 0); poke(view, env2, 7, 0); poke(view, env3, 8, 0);
+    poke(view, syzCount, 9, 0); poke(view, syzMid, 10, 0); poke(view, col, 11, 0);
+    poke(view, smF1, 12, 0); poke(view, smF2, 13, 0); poke(view, smF3, 14, 0);
+    poke(view, st1, 15, 0); poke(view, st2, 16, 0); poke(view, st3, 17, 0);
+    poke(view, reg, 18, 0); poke(view, etot / pairs, 19, 0); poke(view, e0, 20, 0);
+    poke(view, ohold, 21, 0); poke(view, thr, 22, 0);
+}
+ready = 1;
