@@ -1,4 +1,5 @@
 device/
+/dist/
 
 # Visual Studio Code
 .vscode/*
